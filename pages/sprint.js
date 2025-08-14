@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import Layout from '../components/Layout';
-import { storage } from '../lib/storage';
+import Link from 'next/link';
 
 export default function Sprint(){
   const [loading,setLoading]=useState(false);
@@ -10,73 +9,70 @@ export default function Sprint(){
   const [reflection,setReflection]=useState('');
   const [rating,setRating]=useState(0);
 
-  const profile = storage.get('ss_profile');
-  const history = storage.get('ss_history', []);
-
   async function load(){
-    if(!profile){ setError('Please complete the skill test first.'); return }
     setLoading(true); setError('');
     try{
-      const res = await fetch('/api/generate-sprint', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ profile, history }) });
+      const res = await fetch('/api/generate-sprint', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ profile:{}, history:[] }) // simple for now
+      });
       const data = await res.json();
       setDay(data.day); setTips(data.tips||[]);
-    }catch(e){ console.error(e); setError('Could not load today\\'s sprint.') }
-    finally{ setLoading(false) }
+    }catch(e){ console.error(e); setError('Could not load today\'s sprint.'); }
+    finally{ setLoading(false); }
   }
 
-  useEffect(()=>{ load() },[]);
-
-  function complete(){
-    const entry = { date: new Date().toISOString(), title: day?.title||'Sprint', reflection, rating };
-    const next = [...history, entry];
-    storage.set('ss_history', next);
-    alert('Nice work — progress saved!');
-  }
+  useEffect(()=>{ load(); },[]);
 
   return (
-    <Layout active="sprint">
-      <section className="container section">
-        <h1 className="h1">Today&apos;s Sprint</h1>
-        {error && <div className="card"><b>Note:</b> <span className="hint">{error}</span></div>}
-        {loading && <div className="card">Loading…</div>}
-        {day && (
-          <div className="grid" style={{gridTemplateColumns:'2fr 1fr'}}>
-            <div className="card">
-              <div className="badge">Sprint</div>
-              <h3 style={{marginTop:8}}>{day.title}</h3>
-              <p className="hint" style={{marginTop:8}}>{day.knowledge}</p>
+    <main style={{maxWidth:900, margin:'0 auto', padding:'24px', fontFamily:'system-ui'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <h1>Today&apos;s Sprint</h1>
+        <Link href="/dashboard">Back to Dashboard</Link>
+      </div>
 
-              <div style={{marginTop:12}}>
-                <b>Task</b>
-                <p style={{marginTop:6}}>{day.task}</p>
-              </div>
+      {error && <div style={{padding:12, border:'1px solid #ddd', borderRadius:8, margin:'12px 0'}}>Note: {error}</div>}
+      {loading && <div style={{padding:12}}>Loading…</div>}
 
-              <div style={{marginTop:12}}>
-                <b>Reflection</b>
-                <p className="hint" style={{marginTop:6}}>{day.reflection}</p>
-                <textarea rows="3" style={{width:'100%',background:'#0b1020',border:'1px solid #1f2a44',color:'#e5e7eb',borderRadius:10,padding:12}} value={reflection} onChange={e=>setReflection(e.target.value)} />
-                <div style={{display:'flex', alignItems:'center', gap:8, marginTop:8}}>
-                  <span className="hint">How useful was this?</span>
-                  {[1,2,3,4,5].map(n=> <button key={n} onClick={()=>setRating(n)} className="badge" style={{border: rating===n?'2px solid #6ee7b7':'1px solid #334155'}}>{n}</button>)}
-                </div>
-                <div style={{textAlign:'right', marginTop:12}}>
-                  <button className="btn" onClick={complete}>Save progress</button>
-                </div>
-              </div>
+      {day && (
+        <div style={{display:'grid', gap:16, gridTemplateColumns:'2fr 1fr'}}>
+          <div style={{border:'1px solid #ddd', borderRadius:12, padding:16}}>
+            <div style={{opacity:.7, fontSize:12}}>Sprint</div>
+            <h3 style={{marginTop:8}}>{day.title}</h3>
+            <p style={{opacity:.7, marginTop:8}}>{day.knowledge}</p>
+
+            <div style={{marginTop:12}}>
+              <b>Task</b>
+              <p style={{marginTop:6}}>{day.task}</p>
             </div>
 
-            <aside className="card">
-              <b>Tips</b>
-              <ul style={{marginTop:8, paddingLeft:16}}>
-                {(tips||[]).map((t,i)=> <li key={i} className="hint" style={{margin:'6px 0'}}>{t}</li>)}
-              </ul>
-              <div className="hint" style={{marginTop:12}}>
-                Free MVP: data is stored in your browser (<code className="inline">localStorage</code>). Add a database later to sync across devices.
+            <div style={{marginTop:12}}>
+              <b>Reflection</b>
+              <p style={{opacity:.7, marginTop:6}}>{day.reflection}</p>
+              <textarea rows="3" style={{width:'100%'}} value={reflection} onChange={e=>setReflection(e.target.value)} />
+              <div style={{display:'flex', alignItems:'center', gap:8, marginTop:8}}>
+                <span style={{opacity:.7}}>How useful?</span>
+                {[1,2,3,4,5].map(n=> (
+                  <button key={n} onClick={()=>setRating(n)} style={{padding:'6px 10px', borderRadius:999, border: rating===n?'2px solid #0ea5e9':'1px solid #ddd', background:'#fff'}}>
+                    {n}
+                  </button>
+                ))}
               </div>
-            </aside>
+              <div style={{textAlign:'right', marginTop:12}}>
+                <button onClick={()=>alert('Saved (mock)!')} style={{padding:'10px 14px', border:'0', borderRadius:8, background:'#ff7a1a'}}>Save progress</button>
+              </div>
+            </div>
           </div>
-        )}
-      </section>
-    </Layout>
+
+          <aside style={{border:'1px solid #ddd', borderRadius:12, padding:16}}>
+            <b>Tips</b>
+            <ul style={{marginTop:8, paddingLeft:18}}>
+              {(tips||[]).map((t,i)=> <li key={i} style={{opacity:.8, margin:'6px 0'}}>{t}</li>)}
+            </ul>
+          </aside>
+        </div>
+      )}
+    </main>
   );
 }
