@@ -1,6 +1,3 @@
-// pages/api/generate-sprint.js
-import OpenAI from 'openai';
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -11,7 +8,7 @@ export default async function handler(req, res) {
     process.env.SS_AI_PASSCODE &&
     String(passFromHeader) === String(process.env.SS_AI_PASSCODE);
 
-  // If AI not allowed or no key → return MOCK so the app stays free for everyone else
+  // Free/mock mode for everyone else
   if (!hasAIAccess) {
     return res.status(200).json({
       day: {
@@ -25,8 +22,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
     const sys = `You are Skill Sprint, a business micro-coach.
 Return JSON ONLY in this exact schema:
 {"day":{"title":"","knowledge":"2-3 sentences","task":"1 actionable task","reflection":""},"tips":["",""]}`;
@@ -38,22 +33,26 @@ FOCUS: ${(profile?.focus || []).join(', ') || 'General'}
 ROLE: ${profile?.role || 'Unknown'}
 CHALLENGE: ${profile?.challenge || '—'}`;
 
-    const resp = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      temperature: 0.4,
-      max_tokens: 500,
-      messages: [
-        { role: 'system', content: sys },
-        { role: 'user', content: user }
-      ]
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.4,
+        max_tokens: 500,
+        messages: [
+          { role: 'system', content: sys },
+          { role: 'user', content: user }
+        ]
+      })
     });
 
+    const data = await r.json();
     let parsed;
-    try {
-      parsed = JSON.parse(resp.choices?.[0]?.message?.content || '{}');
-    } catch {
-      parsed = null;
-    }
+    try { parsed = JSON.parse(data?.choices?.[0]?.message?.content || '{}'); } catch { parsed = null; }
 
     if (!parsed?.day?.title) throw new Error('Bad JSON from model');
 
