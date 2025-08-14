@@ -8,14 +8,25 @@ export default function Sprint(){
   const [tips,setTips]=useState([]);
   const [reflection,setReflection]=useState('');
   const [rating,setRating]=useState(0);
+  const [aiEnabled, setAiEnabled] = useState(false);
+
+  useEffect(()=>{
+    setAiEnabled(Boolean(localStorage.getItem('ss_ai_passcode')));
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
 
   async function load(){
     setLoading(true); setError('');
     try{
+      const pass = localStorage.getItem('ss_ai_passcode') || '';
       const res = await fetch('/api/generate-sprint', {
         method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ profile:{}, history:[] }) // simple for now
+        headers:{
+          'Content-Type':'application/json',
+          'x-ss-ai-passcode': pass
+        },
+        body: JSON.stringify({ profile:{}, history:[] }) // can wire real profile later
       });
       const data = await res.json();
       setDay(data.day); setTips(data.tips||[]);
@@ -23,13 +34,34 @@ export default function Sprint(){
     finally{ setLoading(false); }
   }
 
-  useEffect(()=>{ load(); },[]);
+  function saveAI(){
+    const code = prompt('Enter AI Dev Passcode');
+    if (!code) return;
+    localStorage.setItem('ss_ai_passcode', code);
+    setAiEnabled(true);
+    load();
+  }
+
+  function clearAI(){
+    localStorage.removeItem('ss_ai_passcode');
+    setAiEnabled(false);
+    load();
+  }
 
   return (
     <main style={{maxWidth:900, margin:'0 auto', padding:'24px', fontFamily:'system-ui'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <h1>Today&apos;s Sprint</h1>
-        <Link href="/dashboard">Back to Dashboard</Link>
+        <div style={{display:'flex', gap:12, alignItems:'center'}}>
+          <small style={{opacity:.7}}>
+            AI: {aiEnabled ? 'ON (dev)' : 'OFF (mock)'}
+          </small>
+          {!aiEnabled
+            ? <button onClick={saveAI} style={{padding:'6px 10px'}}>Enable AI</button>
+            : <button onClick={clearAI} style={{padding:'6px 10px'}}>Disable AI</button>
+          }
+          <Link href="/dashboard">Back to Dashboard</Link>
+        </div>
       </div>
 
       {error && <div style={{padding:12, border:'1px solid #ddd', borderRadius:8, margin:'12px 0'}}>Note: {error}</div>}
@@ -59,20 +91,4 @@ export default function Sprint(){
                   </button>
                 ))}
               </div>
-              <div style={{textAlign:'right', marginTop:12}}>
-                <button onClick={()=>alert('Saved (mock)!')} style={{padding:'10px 14px', border:'0', borderRadius:8, background:'#ff7a1a'}}>Save progress</button>
-              </div>
-            </div>
-          </div>
-
-          <aside style={{border:'1px solid #ddd', borderRadius:12, padding:16}}>
-            <b>Tips</b>
-            <ul style={{marginTop:8, paddingLeft:18}}>
-              {(tips||[]).map((t,i)=> <li key={i} style={{opacity:.8, margin:'6px 0'}}>{t}</li>)}
-            </ul>
-          </aside>
-        </div>
-      )}
-    </main>
-  );
-}
+              <div style={{textAlign:'right', marginTop
