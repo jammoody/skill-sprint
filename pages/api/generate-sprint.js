@@ -2,25 +2,20 @@
 
 // ---- Default "B — Do" steps (always shown; AI can add on top) ----
 const DEFAULT_NEXT_STEPS = [
-  // Marketing / traffic
   'Write 1 headline + 1 hook for your best post; schedule it for tomorrow.',
-  'Find 2 relevant communities (subreddit/FB group); note the top 3 questions asked.',
+  'Find 2 relevant communities; note the top 3 questions asked.',
   'Add a simple CTA to your last post (1 line, 1 link). Repost at a better time.',
-  // Conversion / landing page
   'Add a one-sentence value prop above the fold: “We help [who] get [outcome] by [how].”',
   'Replace one vague benefit with a measurable one (number or deadline).',
-  'Add 1 testimonial or proof point to the hero (stars, logo, or stat).',
-  // Sales / e-commerce
+  'Add 1 testimonial or proof point to the hero.',
   'Add a “Most Popular” badge to your best-selling product.',
   'Create a 10%-off first-order code; add it to hero + checkout.',
   'Draft a 2-line cart-abandon email: subject, one benefit, direct link.',
-  // Team / productivity
-  'Write a 3-bullet weekly priority for yourself; share it with 1 person.',
+  'Write a 3-bullet weekly priority; share it with 1 person.',
   'Turn one recurring task into a 5-bullet checklist template.',
   'Book a 15-minute “decision block” tomorrow for the stickiest item.'
 ];
 
-// ---- Clear, goal-appropriate reflection prompt ----
 const REFLECTION_PROMPT =
   'For each goal: Is it specific and measurable? What did you try today (10 min)? What will you do tomorrow?';
 
@@ -28,112 +23,85 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { profile = {}, history = [], followup = null } = req.body || {};
+  const kpis = profile.kpis || {}; // may include email etc.
   const passFromHeader = req.headers['x-ss-ai-passcode'] || '';
   const hasKey = !!process.env.OPENAI_API_KEY;
   const hasPassVar = !!process.env.SS_AI_PASSCODE;
   const passMatches = hasPassVar && String(passFromHeader) === String(process.env.SS_AI_PASSCODE);
 
-  // Base sprint copy (works for mock and fallback)
+  // Base sprint copy
   const baseDay = {
     title: 'Set 3 Monthly Goals',
-    knowledge:
-      'Clear, realistic goals create focus. Keep each one specific, measurable, and achievable in ~30 days.',
+    knowledge: 'Clear, realistic goals create focus. Keep each goal specific, measurable, and feasible within ~30 days.',
     task: 'Write three specific goals for the next month (include a metric for each).',
     reflection: REFLECTION_PROMPT
   };
-  const baseTips = [
-    'Add a metric to each goal.',
-    'Make the first step doable in 10 minutes.'
-  ];
+  const baseTips = ['Add a metric to each goal.', 'Make the first step doable in 10 minutes.'];
 
   // Helper: safely extract JSON from model output
   const extractJSON = (text = '') => {
     const cleaned = (text || '').replace(/```(?:json)?/gi, '').trim();
     try { return JSON.parse(cleaned); } catch {}
-    const s = cleaned.indexOf('{');
-    const e = cleaned.lastIndexOf('}');
-    if (s !== -1 && e !== -1 && e > s) {
-      try { return JSON.parse(cleaned.slice(s, e + 1)); } catch {}
-    }
+    const s = cleaned.indexOf('{'); const e = cleaned.lastIndexOf('}');
+    if (s !== -1 && e !== -1 && e > s) { try { return JSON.parse(cleaned.slice(s, e+1)); } catch {} }
     return null;
   };
 
-  // ---- MOCK mode if AI is off or passcode mismatch ----
+  // MOCK mode if AI off or pass mismatch
   if (!hasKey || !passMatches) {
-    // If this is a follow-up request (after saving goals), still return helpful steps
     if (followup && Array.isArray(followup.goals)) {
-      return res.status(200).json({
-        mode: 'mock',
-        followupSteps: DEFAULT_NEXT_STEPS.slice(0, 5)
-      });
+      return res.status(200).json({ mode:'mock', followupSteps: DEFAULT_NEXT_STEPS.slice(0,5) });
     }
-    return res.status(200).json({ mode: 'mock', day: baseDay, tips: baseTips });
+    return res.status(200).json({ mode:'mock', day: baseDay, tips: baseTips });
   }
 
-  // ---- FOLLOW-UP: After user saves goals, return specific next steps ----
+  // FOLLOW-UP: immediate next steps, using KPIs if present
   if (followup && Array.isArray(followup.goals)) {
-    const goals = followup.goals.filter(Boolean).slice(0, 3);
-
+    const goals = followup.goals.filter(Boolean).slice(0,3);
     try {
       const sys = `You are Skill Sprint, a pragmatic micro-coach.
 Return JSON ONLY:
 {"followupSteps":["short actionable step","short actionable step","short actionable step"]}`;
-      const user = `User profile: ${JSON.stringify(profile)}
+      const user = `User profile: ${JSON.stringify({...profile, kpis: undefined})}
+KPIs: ${JSON.stringify(kpis)}
 Recent history: ${JSON.stringify(history.slice(-5))}
-User goals (next 30 days): ${JSON.stringify(goals)}
-Constraints: Each step must take <= 10 minutes; be specific; include a simple metric if relevant.`;
+Goals (30 days): ${JSON.stringify(goals)}
+Rules: Each step must take <= 10 minutes; be specific; reference their KPIs when useful; suggest a simple metric to watch.`;
 
       const r = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
           temperature: 0.3,
           max_tokens: 300,
-          messages: [
-            { role: 'system', content: sys },
-            { role: 'user', content: user }
-          ]
+          messages: [{ role:'system', content: sys }, { role:'user', content: user }]
         })
       });
-
       const data = await r.json();
       const raw = data?.choices?.[0]?.message?.content || '';
       const parsed = extractJSON(raw);
-
-      const aiSteps =
-        parsed?.followupSteps && Array.isArray(parsed.followupSteps)
-          ? parsed.followupSteps.filter(Boolean)
-          : [];
-
-      // Combine AI steps with defaults (no duplicates), keep 5 max
+      const aiSteps = parsed?.followupSteps && Array.isArray(parsed.followupSteps) ? parsed.followupSteps.filter(Boolean) : [];
       const combined = [...aiSteps, ...DEFAULT_NEXT_STEPS].filter(Boolean);
-      const unique = Array.from(new Set(combined)).slice(0, 5);
-
-      return res.status(200).json({ mode: 'ai', followupSteps: unique });
+      const unique = Array.from(new Set(combined)).slice(0,5);
+      return res.status(200).json({ mode:'ai', followupSteps: unique });
     } catch {
-      // On any error, still give useful defaults
-      return res.status(200).json({
-        mode: 'ai',
-        followupSteps: DEFAULT_NEXT_STEPS.slice(0, 5)
-      });
+      return res.status(200).json({ mode:'ai', followupSteps: DEFAULT_NEXT_STEPS.slice(0,5) });
     }
   }
 
-  // ---- DAILY SPRINT (AI) ----
+  // DAILY SPRINT using KPIs context
   try {
     const sys = `You are Skill Sprint, a business micro-coach.
 Return JSON ONLY in this schema:
 {"day":{"title":"","knowledge":"2-3 sentences","task":"1 actionable task","reflection":""},"tips":["",""]}
 Rules:
-- Reflection must clearly relate to today’s task.
-- Be concrete; prefer numbers, examples, or checklists.
-- If user focus relates to goals, use "${REFLECTION_PROMPT}" as the reflection.`;
+- If KPIs are present, reference them briefly and compare to general benchmarks (qualitative is fine).
+- Suggest one experiment that could improve the weakest metric.
+- Reflection must clearly relate to today’s task; if goals/measurement are involved, use: "${REFLECTION_PROMPT}".`;
 
-    const user = `PROFILE: ${JSON.stringify(profile)}
+    const user = `PROFILE: ${JSON.stringify({...profile, kpis: undefined})}
+KPIs: ${JSON.stringify(kpis)}
 RECENT: ${JSON.stringify(history.slice(-5))}
 TIME PER DAY: ${profile?.time || '5'} minutes
 FOCUS: ${(profile?.focus || []).join(', ') || 'General'}
@@ -142,18 +110,12 @@ CHALLENGE: ${profile?.challenge || '—'}`;
 
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         temperature: 0.35,
         max_tokens: 500,
-        messages: [
-          { role: 'system', content: sys },
-          { role: 'user', content: user }
-        ]
+        messages: [{ role:'system', content: sys }, { role:'user', content: user }]
       })
     });
 
@@ -161,88 +123,11 @@ CHALLENGE: ${profile?.challenge || '—'}`;
     const raw = data?.choices?.[0]?.message?.content || '';
     const parsed = extractJSON(raw);
 
-    // Guard rails: if model is messy, fall back to clear copy
-    const day =
-      parsed?.day && parsed.day.title
-        ? {
-            ...parsed.day,
-            reflection: parsed.day.reflection || REFLECTION_PROMPT
-          }
-        : baseDay;
+    const day = parsed?.day && parsed.day.title ? { ...parsed.day, reflection: parsed.day.reflection || REFLECTION_PROMPT } : baseDay;
+    const tips = Array.isArray(parsed?.tips) && parsed.tips.length ? parsed.tips : baseTips;
 
-    const tips =
-      Array.isArray(parsed?.tips) && parsed.tips.length ? parsed.tips : baseTips;
-
-    return res.status(200).json({ mode: 'ai', day, tips });
+    return res.status(200).json({ mode:'ai', day, tips });
   } catch {
-    return res.status(200).json({ mode: 'ai', day: baseDay, tips: baseTips });
+    return res.status(200).json({ mode:'ai', day: baseDay, tips: baseTips });
   }
-}
-  // Try a small list of models until one works for your account
-  const modelsToTry = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
-
-  const sys = `You are Skill Sprint, a business micro-coach.
-Return JSON ONLY in this exact schema (no extra text, no markdown, no explanations):
-{"day":{"title":"","knowledge":"2-3 sentences","task":"1 actionable task","reflection":""},"tips":["",""]}`;
-
-  const user = `PROFILE: ${JSON.stringify(profile)}
-RECENT: ${JSON.stringify(history.slice(-5))}
-TIME PER DAY: ${profile?.time || '5'} minutes
-FOCUS: ${(profile?.focus || []).join(', ') || 'General'}
-ROLE: ${profile?.role || 'Unknown'}
-CHALLENGE: ${profile?.challenge || '—'}`;
-
-  const errors = [];
-  for (const model of modelsToTry) {
-    try {
-      const r = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0.4,
-          max_tokens: 500,
-          messages: [
-            { role: 'system', content: sys },
-            { role: 'user', content: user }
-          ]
-        })
-      });
-
-      const data = await r.json();
-
-      if (!r.ok) {
-        errors.push({ model, http: r.status, message: data?.error?.message || 'Unknown error' });
-        continue; // try next model
-      }
-
-      const raw = data?.choices?.[0]?.message?.content || '';
-      const parsed = extractJSON(raw);
-
-      if (parsed?.day?.title) {
-        return res.status(200).json({ mode: 'ai', model, ...parsed });
-      } else {
-        errors.push({ model, http: 200, message: 'Bad JSON from model', raw: raw?.slice(0, 400) });
-      }
-    } catch (e) {
-      errors.push({ model, http: 0, message: e?.message || String(e) });
-    }
-  }
-
-  // If all models failed, return a friendly fallback with debug info
-  return res.status(200).json({
-    mode: 'ai',
-    error: 'All model attempts failed',
-    detail: errors,
-    day: {
-      title: 'Value Proposition Sprint',
-      knowledge: 'Fallback due to AI error.',
-      task: 'Write your one-sentence value proposition.',
-      reflection: 'Would a stranger “get it” in 10 seconds?'
-    },
-    tips: ['Short and specific.', 'Outcome > features.']
-  });
 }
