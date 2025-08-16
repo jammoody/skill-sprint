@@ -14,9 +14,9 @@ export default function Sprint(){
   const [reflection,setReflection]=useState(''); const [rating,setRating]=useState(0);
   const [saved,setSaved]=useState(false); const [nextSteps,setNextSteps]=useState([]);
 
-  // inline KPI capture (email)
-  const [emailKPI,setEmailKPI]=useState({listSize:'',segmentation:'none',openRatePct:'',ctrPct:'',cvrPct:'',revSharePct:''});
-  const [needsEmailKPI,setNeedsEmailKPI]=useState(false);
+  // KPI helper state
+  const [kpiSuggestions, setKpiSuggestions] = useState([]); // from API when missing
+  const [inlineAdd, setInlineAdd] = useState({ metric:'', unit:'%', current:'', target:'' }); // quick-add
 
   // ---- local storage helpers ----
   const getProfile = () => { try { return JSON.parse(localStorage.getItem('ss_profile')||'null') || {}; } catch { return {}; } };
@@ -24,42 +24,28 @@ export default function Sprint(){
   const setHistory = next => localStorage.setItem('ss_history', JSON.stringify(next));
   const getKPIs = () => { try { return JSON.parse(localStorage.getItem('ss_kpis')||'{}') || {}; } catch { return {}; } };
   const setKPIs = next => localStorage.setItem('ss_kpis', JSON.stringify(next||{}));
+  const ensureKPIShape = () => {
+    const k = getKPIs(); if (!k.categories) k.categories = {}; return k;
+  };
+
+  // Determine primary focus (from onboarding)
+  const getPrimaryFocus = () => {
+    const p = getProfile(); const arr = Array.isArray(p.focus) ? p.focus : []; return arr[0] || 'General';
+  };
 
   useEffect(()=>{
     const enabled = typeof window !== 'undefined' && localStorage.getItem('ss_ai_passcode');
     setAiEnabled(Boolean(enabled));
-    // prefill inline KPI form if any saved
-    const k = getKPIs();
-    const e = k.email || {};
-    setEmailKPI({
-      listSize: e.listSize ?? '',
-      segmentation: e.segmentation ?? 'none',
-      openRatePct: e.openRate != null ? Math.round(e.openRate*100) : '',
-      ctrPct: e.ctr != null ? Math.round(e.ctr*100) : '',
-      cvrPct: e.cvr != null ? Math.round(e.cvr*100) : '',
-      revSharePct: e.revShare != null ? Math.round(e.revShare*100) : ''
-    });
-    decideIfNeedsEmailKPI();
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
-  function decideIfNeedsEmailKPI(){
-    const profile = getProfile();
-    const focus = profile?.focus || [];
-    const wantsEmail = focus.includes('Marketing'); // treat Marketing as email track for MVP
-    const e = (getKPIs().email)||{};
-    const required = ['listSize','segmentation','openRate','ctr','cvr','revShare'];
-    const missing = required.filter(key => e[key]==='' || e[key]==null || e[key]===undefined);
-    setNeedsEmailKPI(wantsEmail && missing.length>0);
-  }
-
-  // ---- load a sprint (uses KPIs if present) ----
+  // ---- load sprint (AI or mock), and collect KPI suggestions if provided ----
   async function load(){
-    setLoading(true); setError(''); setSaved(false); setNextSteps([]);
+    setLoading(true); setError(''); setSaved(false); setNextSteps([]); setKpiSuggestions([]);
     try{
       const pass = typeof window !== 'undefined' ? (localStorage.getItem('ss_ai_passcode') || '') : '';
-      const body = { profile: {...getProfile(), kpis: getKPIs()}, history: getHistory() };
+      const body = { profile: {...getProfile(), kpis: ensureKPIShape()}, history: getHistory() };
       const res = await fetch('/api/generate-sprint', {
         method:'POST',
         headers:{ 'Content-Type':'application/json', 'x-ss-ai-passcode': pass },
@@ -72,6 +58,7 @@ export default function Sprint(){
       }
       setDay(data.day || null);
       setTips(Array.isArray(data.tips) ? data.tips : []);
+      setKpiSuggestions(Array.isArray(data.kpiSuggestions) ? data.kpiSuggestions : []);
     }catch{
       setError('Could not load today\'s sprint.');
     } finally { setLoading(false); }
@@ -81,24 +68,23 @@ export default function Sprint(){
   function enableAI(){ const code = prompt('Enter AI Dev Passcode (matches SS_AI_PASSCODE in Vercel)'); if(!code) return; localStorage.setItem('ss_ai_passcode', code); setAiEnabled(true); load(); }
   function disableAI(){ localStorage.removeItem('ss_ai_passcode'); setAiEnabled(false); load(); }
 
-  // ---- Save KPIs inline ----
-  function saveInlineEmailKPIs(){
-    const toNumber = v => (v==='' || v==null) ? null : Number(v);
-    const toRatio = v => (v==='' || v==null) ? null : Number(v)/100;
-    const next = {
-      email:{
-        listSize: toNumber(emailKPI.listSize),
-        segmentation: emailKPI.segmentation,
-        openRate: toRatio(emailKPI.openRatePct),
-        ctr: toRatio(emailKPI.ctrPct),
-        cvr: toRatio(emailKPI.cvrPct),
-        revShare: toRatio(emailKPI.revSharePct)
-      }
+  // ---- quick add one KPI for the current focus ----
+  function addOneKPI(){
+    const focus = getPrimaryFocus();
+    const { metric, unit, current, target } = inlineAdd;
+    if (!metric.trim()) return alert('Add a metric name, e.g., "Open rate" or "CVR"');
+    const store = ensureKPIShape();
+    const cat = store.categories[focus] || { metrics:{} };
+    cat.metrics[metric.trim()] = {
+      unit: unit || '%',
+      current: current===''? null : Number(current),
+      target: target===''? null : Number(target)
     };
-    setKPIs(next);
-    setNeedsEmailKPI(false);
-    alert('KPIs saved. Sprint will use these numbers.');
-    load();
+    store.categories[focus] = cat;
+    setKPIs(store);
+    setInlineAdd({ metric:'', unit:'%', current:'', target:'' });
+    alert(`Saved KPI "${metric.trim()}" under ${focus}.`);
+    load(); // refresh sprint with KPI context
   }
 
   // ---- save sprint + ask for follow-up steps ----
@@ -116,7 +102,7 @@ export default function Sprint(){
       const res = await fetch('/api/generate-sprint', {
         method:'POST',
         headers:{ 'Content-Type':'application/json', 'x-ss-ai-passcode': pass },
-        body: JSON.stringify({ profile: {...getProfile(), kpis: getKPIs()}, history: nextHist, followup: { goals } })
+        body: JSON.stringify({ profile: {...getProfile(), kpis: ensureKPIShape()}, history: nextHist, followup: { goals } })
       });
       const data = await res.json();
       let follow = [];
@@ -132,17 +118,18 @@ export default function Sprint(){
       setNextSteps(follow.slice(0,5));
     } catch {
       setNextSteps([
-        'Draft the first 3 bullets for Goal #1.',
-        'Schedule a 10-minute slot tomorrow for Goal #1.',
-        'Define one simple metric to track progress.'
+        'Draft first 3 bullets for Goal #1.',
+        'Schedule a 10-minute slot tomorrow.',
+        'Define one simple metric to track.'
       ]);
     } finally {
       setLoading(false);
     }
   }
 
+  // ---------- UI ----------
   return (
-    <main style={{maxWidth:900, margin:'0 auto', padding:'24px', fontFamily:'system-ui'}}>
+    <main style={{maxWidth:960, margin:'0 auto', padding:'24px', fontFamily:'system-ui'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center', border:'2px dashed #f59e0b', padding:'8px'}}>
         <h1>Today&apos;s Sprint</h1>
         <div style={{display:'flex', gap:12, alignItems:'center'}}>
@@ -157,44 +144,30 @@ export default function Sprint(){
       {error && <div style={{padding:12, border:'1px solid #f87171', background:'#fee2e2', color:'#7f1d1d', borderRadius:8, margin:'12px 0'}}>{error}</div>}
       {loading && <div style={{padding:12}}>Loading…</div>}
 
-      {/* Inline KPI prompt if needed */}
-      {needsEmailKPI && (
+      {/* KPI suggestions (when missing for primary focus) */}
+      {kpiSuggestions.length > 0 && (
         <section style={{border:'2px solid #0ea5e9', borderRadius:12, padding:16, marginTop:16}}>
-          <div style={{opacity:.7, fontSize:12}}>Quick setup — Email KPIs</div>
-          <p style={{marginTop:8,opacity:.85}}>Add a few numbers so your coach can benchmark performance and tailor advice.</p>
-          <div style={{display:'grid', gap:12, gridTemplateColumns:'1fr 1fr'}}>
-            <label>List size
-              <input type="number" min="0" value={emailKPI.listSize} onChange={e=>setEmailKPI(v=>({...v,listSize:e.target.value}))}
-                style={{width:'100%',padding:10,border:'1px solid #ddd',borderRadius:8}}/>
-            </label>
-            <label>Segmentation
-              <select value={emailKPI.segmentation} onChange={e=>setEmailKPI(v=>({...v,segmentation:e.target.value}))}
-                style={{width:'100%',padding:10,border:'1px solid #ddd',borderRadius:8}}>
-                <option value="none">None</option>
-                <option value="basic">Basic (2–4 segments)</option>
-                <option value="advanced">Advanced (5+ / behavioral)</option>
-              </select>
-            </label>
-            <label>Open rate (%)
-              <input type="number" min="0" max="100" value={emailKPI.openRatePct} onChange={e=>setEmailKPI(v=>({...v,openRatePct:e.target.value}))}
-                style={{width:'100%',padding:10,border:'1px solid #ddd',borderRadius:8}}/>
-            </label>
-            <label>Click-through rate (%)
-              <input type="number" min="0" max="100" value={emailKPI.ctrPct} onChange={e=>setEmailKPI(v=>({...v,ctrPct:e.target.value}))}
-                style={{width:'100%',padding:10,border:'1px solid #ddd',borderRadius:8}}/>
-            </label>
-            <label>Conversion rate (%)
-              <input type="number" min="0" max="100" value={emailKPI.cvrPct} onChange={e=>setEmailKPI(v=>({...v,cvrPct:e.target.value}))}
-                style={{width:'100%',padding:10,border:'1px solid #ddd',borderRadius:8}}/>
-            </label>
-            <label>Revenue share from email (%)
-              <input type="number" min="0" max="100" value={emailKPI.revSharePct} onChange={e=>setEmailKPI(v=>({...v,revSharePct:e.target.value}))}
-                style={{width:'100%',padding:10,border:'1px solid #ddd',borderRadius:8}}/>
-            </label>
+          <div style={{opacity:.7, fontSize:12}}>You’re close — add KPIs?</div>
+          <p style={{marginTop:6, opacity:.85}}>
+            Based on your focus (<b>{getPrimaryFocus()}</b>), here are a few KPIs to consider. Add one quickly here or open the full KPI page.
+          </p>
+          <ul style={{marginTop:8, paddingLeft:18}}>
+            {kpiSuggestions.map((s,i)=>(
+              <li key={i} style={{margin:'4px 0'}}>
+                <b>{s.name}</b> — <span style={{opacity:.85}}>{s.why}</span>
+                {s.how && <span style={{opacity:.6}}> (How: {s.how})</span>}
+              </li>
+            ))}
+          </ul>
+          <div style={{display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr auto', gap:8, marginTop:10}}>
+            <input placeholder="Metric (e.g., Open rate, CVR, CAC)" value={inlineAdd.metric} onChange={e=>setInlineAdd(v=>({...v,metric:e.target.value}))} style={{padding:8,border:'1px solid #ddd',borderRadius:8}} />
+            <input placeholder="% | # | £ | $" value={inlineAdd.unit} onChange={e=>setInlineAdd(v=>({...v,unit:e.target.value}))} style={{padding:8,border:'1px solid #ddd',borderRadius:8}} />
+            <input type="number" placeholder="Current" value={inlineAdd.current} onChange={e=>setInlineAdd(v=>({...v,current:e.target.value}))} style={{padding:8,border:'1px solid #ddd',borderRadius:8}} />
+            <input type="number" placeholder="Target" value={inlineAdd.target} onChange={e=>setInlineAdd(v=>({...v,target:e.target.value}))} style={{padding:8,border:'1px solid #ddd',borderRadius:8}} />
+            <button onClick={addOneKPI} style={{border:'1px solid #ddd', borderRadius:8, background:'#fff'}}>Add</button>
           </div>
-          <div style={{display:'flex',gap:12,marginTop:12}}>
-            <button onClick={saveInlineEmailKPIs} style={{padding:'10px 14px',border:0,borderRadius:8,background:'#ff7a1a',color:'#111',fontWeight:700}}>Save KPIs & refresh sprint</button>
-            <Link href="/kpis">Open full KPI page</Link>
+          <div style={{marginTop:10}}>
+            <Link href="/kpis">Open full KPI manager →</Link>
           </div>
         </section>
       )}
@@ -242,7 +215,7 @@ export default function Sprint(){
               </div>
               {saved && (
                 <div style={{marginTop:12, padding:12, border:'1px solid #bbf7d0', background:'#ecfdf5', color:'#065f46', borderRadius:8}}>
-                  Progress saved ✓ — Your goals were stored to the Dashboard. See “Coach now” below for immediate 10-minute actions.
+                  Progress saved ✓ — See “Coach now” for immediate 10-minute actions tied to your goals/KPIs.
                 </div>
               )}
             </section>
@@ -266,96 +239,14 @@ export default function Sprint(){
               {(tips||[]).map((t,i)=> <li key={i} style={{opacity:.8, margin:'6px 0'}}>{t}</li>)}
             </ul>
             <div style={{opacity:.7, fontSize:12, marginTop:12}}>
-              {aiEnabled ? 'AI mode (dev): content uses your KPIs when available.' : 'Mock mode: demo content without API costs.'}
+              {aiEnabled ? 'AI mode: advice uses your focus & KPIs when available.' : 'Mock mode: demo content without API costs.'}
             </div>
             <div style={{marginTop:12}}>
-              <Link href="/kpis">Update KPIs →</Link>
+              <Link href="/kpis">Add/Update KPIs →</Link>
             </div>
           </aside>
         </div>
       )}
     </main>
   );
-                                                                                              }            { role: 'user', content: user }
-          ]
-        })
-      });
-
-      const data = await r.json();
-      const raw = data?.choices?.[0]?.message?.content || '';
-      const parsed = extractJSON(raw);
-
-      const aiSteps =
-        parsed?.followupSteps && Array.isArray(parsed.followupSteps)
-          ? parsed.followupSteps.filter(Boolean)
-          : [];
-
-      // Combine AI steps with defaults (no duplicates), keep 5 max
-      const combined = [...aiSteps, ...DEFAULT_NEXT_STEPS].filter(Boolean);
-      const unique = Array.from(new Set(combined)).slice(0, 5);
-
-      return res.status(200).json({ mode: 'ai', followupSteps: unique });
-    } catch {
-      // On any error, still give useful defaults
-      return res.status(200).json({
-        mode: 'ai',
-        followupSteps: DEFAULT_NEXT_STEPS.slice(0, 5)
-      });
-    }
-  }
-
-  // ---- DAILY SPRINT (AI) ----
-  try {
-    const sys = `You are Skill Sprint, a business micro-coach.
-Return JSON ONLY in this schema:
-{"day":{"title":"","knowledge":"2-3 sentences","task":"1 actionable task","reflection":""},"tips":["",""]}
-Rules:
-- Reflection must clearly relate to today’s task.
-- Be concrete; prefer numbers, examples, or checklists.
-- If user focus relates to goals, use "${REFLECTION_PROMPT}" as the reflection.`;
-
-    const user = `PROFILE: ${JSON.stringify(profile)}
-RECENT: ${JSON.stringify(history.slice(-5))}
-TIME PER DAY: ${profile?.time || '5'} minutes
-FOCUS: ${(profile?.focus || []).join(', ') || 'General'}
-ROLE: ${profile?.role || 'Unknown'}
-CHALLENGE: ${profile?.challenge || '—'}`;
-
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        temperature: 0.35,
-        max_tokens: 500,
-        messages: [
-          { role: 'system', content: sys },
-          { role: 'user', content: user }
-        ]
-      })
-    });
-
-    const data = await r.json();
-    const raw = data?.choices?.[0]?.message?.content || '';
-    const parsed = extractJSON(raw);
-
-    // Guard rails: if model is messy, fall back to clear copy
-    const day =
-      parsed?.day && parsed.day.title
-        ? {
-            ...parsed.day,
-            reflection: parsed.day.reflection || REFLECTION_PROMPT
-          }
-        : baseDay;
-
-    const tips =
-      Array.isArray(parsed?.tips) && parsed.tips.length ? parsed.tips : baseTips;
-
-    return res.status(200).json({ mode: 'ai', day, tips });
-  } catch {
-    return res.status(200).json({ mode: 'ai', day: baseDay, tips: baseTips });
-  }
-}
+            }
