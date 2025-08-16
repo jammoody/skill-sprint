@@ -1,0 +1,110 @@
+// pages/kpis.js
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+
+export default function KPIs(){
+  const [email, setEmail] = useState({
+    listSize: '',
+    segmentation: 'none',
+    openRatePct: '',
+    ctrPct: '',
+    cvrPct: '',
+    revSharePct: ''
+  });
+
+  useEffect(()=>{
+    try {
+      const all = JSON.parse(localStorage.getItem('ss_kpis')||'{}');
+      const e = all.email || {};
+      setEmail({
+        listSize: e.listSize ?? '',
+        segmentation: e.segmentation ?? 'none',
+        openRatePct: e.openRate != null ? Math.round(e.openRate*100) : '',
+        ctrPct: e.ctr != null ? Math.round(e.ctr*100) : '',
+        cvrPct: e.cvr != null ? Math.round(e.cvr*100) : '',
+        revSharePct: e.revShare != null ? Math.round(e.revShare*100) : ''
+      });
+    } catch {}
+  },[]);
+
+  function save(){
+    const toNumber = v => (v==='' || v==null) ? null : Number(v);
+    const toRatio = v => (v==='' || v==null) ? null : Number(v)/100;
+
+    const next = {
+      email:{
+        listSize: toNumber(email.listSize),
+        segmentation: email.segmentation, // 'none' | 'basic' | 'advanced'
+        openRate: toRatio(email.openRatePct),
+        ctr: toRatio(email.ctrPct),
+        cvr: toRatio(email.cvrPct),
+        revShare: toRatio(email.revSharePct)
+      }
+    };
+    localStorage.setItem('ss_kpis', JSON.stringify(next));
+    alert('KPIs saved');
+  }
+
+  return (
+    <main style={{maxWidth:900, margin:'0 auto', padding:24, fontFamily:'system-ui'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+        <h1>Key Metrics (KPIs)</h1>
+        <div style={{display:'flex',gap:12}}>
+          <Link href="/sprint">Back to Sprint</Link>
+          <Link href="/dashboard">Dashboard</Link>
+        </div>
+      </div>
+      <p style={{opacity:.8, marginTop:0}}>Start with email marketing. These numbers let Skill Sprint benchmark your performance and suggest targeted experiments.</p>
+
+      <section style={{border:'1px solid #ddd', borderRadius:12, padding:16, marginTop:12}}>
+        <h3 style={{marginTop:0}}>Email Marketing</h3>
+        <div style={{display:'grid', gap:12, gridTemplateColumns:'1fr 1fr'}}>
+          <label>List size
+            <input type="number" min="0" value={email.listSize}
+              onChange={e=>setEmail(v=>({...v,listSize:e.target.value}))}
+              style={{width:'100%',padding:10,border:'1px solid #ddd',borderRadius:8}}/>
+          </label>
+
+          <label>Segmentation
+            <select value={email.segmentation}
+              onChange={e=>setEmail(v=>({...v,segmentation:e.target.value}))}
+              style={{width:'100%',padding:10,border:'1px solid #ddd',borderRadius:8}}>
+              <option value="none">None</option>
+              <option value="basic">Basic (2–4 segments)</option>
+              <option value="advanced">Advanced (5+ segments / behaviors)</option>
+            </select>
+          </label>
+
+          <label>Average open rate (%)
+            <input type="number" min="0" max="100" value={email.openRatePct}
+              onChange={e=>setEmail(v=>({...v,openRatePct:e.target.value}))}
+              style={{width:'100%',padding:10,border:'1px solid #ddd',borderRadius:8}}/>
+          </label>
+
+          <label>Average click-through rate (%)
+            <input type="number" min="0" max="100" value={email.ctrPct}
+              onChange={e=>setEmail(v=>({...v,ctrPct:e.target.value}))}
+              style={{width:'100%',padding:10,border:'1px solid #ddd',borderRadius:8}}/>
+          </label>
+
+          <label>Conversion rate from email (%)
+            <input type="number" min="0" max="100" value={email.cvrPct}
+              onChange={e=>setEmail(v=>({...v,cvrPct:e.target.value}))}
+              style={{width:'100%',padding:10,border:'1px solid #ddd',borderRadius:8}}/>
+          </label>
+
+          <label>Revenue share from email (% of total)
+            <input type="number" min="0" max="100" value={email.revSharePct}
+              onChange={e=>setEmail(v=>({...v,revSharePct:e.target.value}))}
+              style={{width:'100%',padding:10,border:'1px solid #ddd',borderRadius:8}}/>
+          </label>
+        </div>
+
+        <div style={{display:'flex',gap:12,marginTop:16}}>
+          <button onClick={save} style={{padding:'10px 14px',border:0,borderRadius:8,background:'#ff7a1a',color:'#111',fontWeight:700}}>Save KPIs</button>
+          <Link href="/sprint" style={{padding:'10px 14px',border:'1px solid #ddd',borderRadius:8}}>Back to Sprint</Link>
+        </div>
+      </section>
+    </main>
+  );
+}
