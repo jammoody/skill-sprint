@@ -18,7 +18,7 @@ export default function Onboarding(){
   function save(){
     const profile={ focus:[focus], coachStyle:style, time:Number(time), sprintDays:Number(length), challenge:'' };
     localStorage.setItem('ss_profile', JSON.stringify(profile));
-    window.location.assign('/dashboard');
+    window.location.assign('/sprint');
   }
 
   return (
@@ -33,4 +33,42 @@ export default function Onboarding(){
 
         <div className="row" style={{gridTemplateColumns:'repeat(3,minmax(0,1fr))', marginTop:10}}>
           {FOCUS.map(f=>(
-            <button key={f} className="btn" onClick={()=>setFocus(f)} style={{borderColor: focus===
+            <button key={f} className="btn"
+              onClick={()=>setFocus(f)}
+              style={{borderColor: focus===f?'var(--accent)':'var(--border)'}}>
+              {f}
+            </button>
+          ))}
+        </div>
+
+        <div className="row" style={{marginTop:12}}>
+          {STYLES.map(s=>(
+            <button key={s.key} className="btn"
+              onClick={()=>setStyle(s.key)}
+              style={{borderColor: style===s.key?'var(--accent)':'var(--border)'}}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="row two" style={{marginTop:12}}>
+          <div className="card">
+            <b>Minutes per day</b>
+            <input className="input" type="number" min="5" max="60"
+                   value={time} onChange={e=>setTime(e.target.value)} style={{marginTop:8}}/>
+          </div>
+          <div className="card">
+            <b>Sprint length (days)</b>
+            <input className="input" type="number" min="7" max="60"
+                   value={length} onChange={e=>setLength(e.target.value)} style={{marginTop:8}}/>
+          </div>
+        </div>
+
+        <div className="spaced" style={{marginTop:16}}>
+          <Link className="btn" href="/">Cancel</Link>
+          <button className="btn btn-primary" onClick={save}>Save & Continue</button>
+        </div>
+      </div>
+    </main>
+  );
+}
