@@ -1,65 +1,77 @@
-import { useEffect, useState } from 'react';
-import Layout from '../components/Layout';
-import { storage } from '../lib/storage';
-import { useRouter } from 'next/router';
+// pages/onboarding.js
+import { useState, useMemo } from 'react';
+import Link from 'next/link';
 
-const focusOptions = ['Marketing','E-commerce','Retail','Leadership','Finance','Customer Experience'];
+const COACH_STYLES = [
+  { key:'supportive', label:'Supportive', sub:'Encouraging, positive, momentum-building' },
+  { key:'direct', label:'Direct', sub:'No-nonsense, clear, to the point' },
+  { key:'analytical', label:'Analytical', sub:'Data-first, KPI-driven, experiments' }
+];
+
+const FOCUS_AREAS = ['Marketing', 'E-commerce', 'Leadership', 'Operations', 'Sales', 'General'];
 
 export default function Onboarding(){
-  const router = useRouter();
-  const [role,setRole]=useState('Owner');
-  const [years,setYears]=useState('0-1');
-  const [focus,setFocus]=useState([]);
-  const [time,setTime]=useState('5');
-  const [challenge,setChallenge]=useState('');
+  const [step, setStep] = useState(0);
+  const [focus, setFocus] = useState('Marketing');
+  const [style, setStyle] = useState('analytical');
+  const [time, setTime] = useState(10);           // minutes per day
+  const [length, setLength] = useState(30);       // sprint days
 
-  useEffect(()=>{ const p=storage.get('ss_profile'); if(p){setRole(p.role||'Owner');setYears(p.years||'0-1');setFocus(p.focus||[]);setTime(p.time||'5');setChallenge(p.challenge||'')} },[]);
+  const steps = useMemo(()=>[
+    { title:'What do you want to focus on?', render: FocusStep },
+    { title:'Pick your coaching style', render: StyleStep },
+    { title:'How much time and duration?', render: TimeStep },
+    { title:'Ready to sprint', render: SummaryStep }
+  ],[]);
 
-  function toggle(item){ setFocus(prev=> prev.includes(item)? prev.filter(i=>i!==item): [...prev,item].slice(0,3)) }
-  function save(){ storage.set('ss_profile',{role,years,focus,time,challenge,createdAt:Date.now()}); if(!storage.get('ss_history')) storage.set('ss_history',[]); router.push('/dashboard') }
+  const progress = ((step+1)/steps.length)*100;
 
+  function next(){
+    if (step < steps.length-1) setStep(step+1);
+    else finish();
+  }
+  function back(){
+    if (step > 0) setStep(step-1);
+  }
+  function finish(){
+    const profile = {
+      focus:[focus],
+      coachStyle:style,
+      time:Number(time),
+      sprintDays:Number(length),
+      challenge:''
+    };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ss_profile', JSON.stringify(profile));
+    }
+    window.location.assign('/sprint');
+  }
+
+  const Current = steps[step].render;
   return (
-    <Layout active="onboarding">
-      <section className="container section">
-        <div className="kicker">Free skill test</div>
-        <h1 className="h1">Let’s personalise your daily plan</h1>
-        <p className="sub">60 seconds — no login needed. You can edit this later.</p>
+    <main className="container">
+      <header className="header">
+        <div className="brand">
+          <span className="brand-badge" />
+          Skill Sprint
+        </div>
+        <div className="nav small"><Link href="/">Home</Link></div>
+      </header>
 
-        <div className="grid" style={{gridTemplateColumns:'1fr', gap:16, maxWidth:780, marginTop:16}}>
-          <div className="card"><label>What’s your current role?</label><br/>
-            <select value={role} onChange={e=>setRole(e.target.value)} style={{width:'100%',background:'#0b1020',color:'#e5e7eb',border:'1px solid #1f2a44',borderRadius:10,padding:12}}>
-              <option>Owner</option><option>Manager</option><option>Freelancer</option><option>Employee</option>
-            </select>
+      <div className="card" style={{marginTop:18}}>
+        <div className="spaced">
+          <div>
+            <div className="small">Step {step+1} of {steps.length}</div>
+            <h2 style={{margin:'6px 0 8px 0'}}>{steps[step].title}</h2>
           </div>
-
-          <div className="card"><label>How many years in business?</label><br/>
-            <select value={years} onChange={e=>setYears(e.target.value)} style={{width:'100%',background:'#0b1020',color:'#e5e7eb',border:'1px solid #1f2a44',borderRadius:10,padding:12}}>
-              <option>0-1</option><option>2-4</option><option>5+</option>
-            </select>
-          </div>
-
-          <div className="card"><label>Pick up to 3 focus areas</label>
-            <div style={{display:'flex', gap:8, flexWrap:'wrap', marginTop:10}}>
-              {focusOptions.map(o=> <button key={o} onClick={()=>toggle(o)} className="badge" style={{border:'1px solid #334155', background: focus.includes(o)? '#121a33':'#0b1020', color:'#e2e8f0'}}>{o}</button>)}
-            </div>
-          </div>
-
-          <div className="card"><label>How many minutes per day can you commit?</label><br/>
-            <select value={time} onChange={e=>setTime(e.target.value)} style={{width:'100%',background:'#0b1020',color:'#e5e7eb',border:'1px solid #1f2a44',borderRadius:10,padding:12}}>
-              <option>5</option><option>10</option><option>20+</option>
-            </select>
-          </div>
-
-          <div className="card"><label>What’s your biggest current challenge?</label><br/>
-            <textarea rows="3" value={challenge} onChange={e=>setChallenge(e.target.value)} placeholder="e.g., Low conversion rate with high ad spend." style={{width:'100%',background:'#0b1020',color:'#e5e7eb',border:'1px solid #1f2a44',borderRadius:10,padding:12}}/>
-          </div>
-
-          <div style={{display:'flex',gap:12}}>
-            <button className="btn" onClick={save}>Save & Continue</button>
-            <span className="hint">Your data is stored in your browser for now.</span>
+          <div style={{minWidth:160}}>
+            <div className="progress"><span style={{width:`${progress}%`}} /></div>
           </div>
         </div>
-      </section>
-    </Layout>
-  );
-}
+
+        <div style={{marginTop:16}}>
+          <Current {...{focus,setFocus,style,setStyle,time,setTime,length,setLength}} />
+        </div>
+
+        <div className="spaced" style={{marginTop:18}}>
+          <button className="btn" onClick={back}
