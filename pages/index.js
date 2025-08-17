@@ -1,35 +1,45 @@
-import Head from 'next/head';
+// pages/index.js
 import Link from 'next/link';
-import Layout from '../components/Layout';
 
 export default function Home(){
   return (
-    <Layout active="home">
-      <Head><title>Skill Sprint — Your Daily Business Workout</title></Head>
-      <section className="hero">
-        <div className="container section grid grid-2" style={{alignItems:'center'}}>
-          <div>
-            <div className="kicker">Built for busy founders & teams</div>
-            <h1 className="h1">Short, sharp training.<br/>Long-term results.</h1>
-            <p className="sub">Pick your focus — marketing, e-commerce, retail, leadership — and Skill Sprint delivers a 5–10 minute daily workout that turns learning into action.</p>
-            <div style={{display:'flex',gap:12,marginTop:16}}>
-              <Link href="/onboarding" className="btn">Take My Free Skill Test</Link>
-              <Link href="/sprint" className="btn secondary">Try Today’s Sprint</Link>
-            </div>
-            <div className="testlinks" style={{marginTop:18}}>
-              <span className="hint">Test pages: </span>
-              <Link href="/">Home</Link> · <Link href="/onboarding">Onboarding</Link> · <Link href="/sprint">Sprint</Link> · <Link href="/dashboard">Dashboard</Link>
-            </div>
-          </div>
-          <div className="card">
-            <div className="badge">Preview</div>
-            <h3>Day 1: Value Proposition</h3>
-            <p className="hint">Write a one-sentence value proposition. We’ll refine it tomorrow.</p>
-            <textarea rows="4" style={{width:'100%',background:'#0b1020',border:'1px solid #1f2a44',color:'#e5e7eb',borderRadius:10,padding:12}} placeholder="We help [who] achieve [outcome] by [how]." />
-            <div style={{textAlign:'right',marginTop:8}}><button className="btn">Save</button></div>
-          </div>
+    <main className="container">
+      <header className="header">
+        <div className="brand">
+          <span className="brand-badge" />
+          Skill Sprint
+        </div>
+        <nav className="nav">
+          <Link href="/onboarding">Get started</Link>
+          <Link href="/sprint">Today</Link>
+          <Link href="/dashboard">Dashboard</Link>
+        </nav>
+      </header>
+
+      <section className="hero" style={{marginTop:18}}>
+        <div className="tag">Professional micro-coaching</div>
+        <h1>Level up in 10 minutes a day</h1>
+        <p>Clean, step-by-step sprints that turn goals into measurable progress — with a coach style that fits you.</p>
+        <div style={{display:'flex', gap:12, marginTop:20}}>
+          <Link href="/onboarding" className="btn btn-primary btn-lg">Start your first sprint</Link>
+          <Link href="/sprint" className="btn btn-lg">View today’s sprint</Link>
         </div>
       </section>
-    </Layout>
+
+      <section style={{marginTop:20}} className="row three">
+        <div className="card">
+          <b>One step at a time</b>
+          <p className="help" style={{marginTop:6}}>No overwhelm. A single clear action per screen, just like the best product onboardings.</p>
+        </div>
+        <div className="card">
+          <b>Measurable KPIs</b>
+          <p className="help" style={{marginTop:6}}>Track current vs target for anything — revenue, CVR, churn, response time, you name it.</p>
+        </div>
+        <div className="card">
+          <b>Your coaching style</b>
+          <p className="help" style={{marginTop:6}}>Supportive, direct, or data-driven — choose a voice that motivates you.</p>
+        </div>
+      </section>
+    </main>
   );
 }
