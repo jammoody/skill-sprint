@@ -1,41 +1,38 @@
 // pages/sprint.js
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Nav from '../components/Nav';
-import { getProfile, getKPIs, setKPIs, appendHistory } from '../lib/store';
+import CoachDock from '../components/CoachDock';
+import { getProfile, getKPIs, setKPIs, getSprintById, updateSprint, setSprintStatus } from '../lib/store';
 
-// Suggested segments catalog (extend per focus as needed)
 const SUGGESTED_LIBRARY = {
   Marketing: [
-    { name:'Repeat buyers (90 days)', criteria:'Purchased ≥2 times in 90d', why:'Warmer audience; incremental purchase lifts revenue fast.' },
-    { name:'Browsed-abandoners (14 days)', criteria:'Visited product pages but no purchase (14d)', why:'Fresh intent → higher CTR/CVR with light nudge.' },
-    { name:'High AOV customers', criteria:'AOV in top 20%', why:'Smaller list, outsized revenue per send; tailor premium offers.' },
+    { name:'Repeat buyers (90 days)', criteria:'Purchased ≥2 in 90d', why:'Warmer audience; quick lift.' },
+    { name:'Browsed-abandoners (14 days)', criteria:'Visited product, no purchase (14d)', why:'Fresh intent → higher CTR/CVR.' },
+    { name:'High AOV customers', criteria:'Top 20% AOV', why:'Small list, outsized revenue per send.' },
   ],
   'E-commerce': [
-    { name:'Add-to-cart no checkout', criteria:'Added to cart, no order (7d)', why:'Closest to purchase; simple reminder works well.' },
-    { name:'First-time buyers (30 days)', criteria:'1 order in 30d', why:'Onboarding + cross-sell can lift LTV early.' },
-    { name:'Lapsed buyers', criteria:'No purchase in 180d', why:'Reactivation with incentive recovers dormant revenue.' },
+    { name:'Add-to-cart no checkout', criteria:'Added to cart, no order (7d)', why:'Closest to purchase; easy win.' },
+    { name:'First-time buyers (30 days)', criteria:'1 order in 30d', why:'Onboarding + cross-sell lifts LTV.' },
+    { name:'Lapsed buyers', criteria:'No purchase in 180d', why:'Reactivation can recover dormants.' },
   ],
   General: [
-    { name:'Recent engagers', criteria:'Opened or clicked in 30d', why:'Active audience → quick signal on message fit.' },
-    { name:'Prospects by source', criteria:'Came from source X', why:'Match message to acquisition promise for relevance.' },
+    { name:'Recent engagers', criteria:'Opened/clicked in 30d', why:'Active audience → quick signal.' },
+    { name:'Prospects by source', criteria:'Came from source X', why:'Match message to acquisition.' },
   ]
 };
 
 export default function Sprint(){
+  const router = useRouter();
+  const { sid } = router.query || {};
   const profile = useMemo(()=>getProfile(),[]);
   const kpisObj = useMemo(()=>getKPIs(),[]);
-  const [seed,setSeed]=useState(null);
+  const [sprint,setSprint] = useState(null);
 
+  const steps=['Learn','Apply','Evolve','Coach'];
   const [step,setStep]=useState(0);
-  const [day,setDay]=useState({
-    title:'High-impact segmentation',
-    knowledge:'Two quick segments can lift CTR/CVR without heavy setup.',
-    task:'Create 2 segments you can email this week.',
-    reflection:'What did you try (≤10 min)? What changed (number/observation)? What will you do tomorrow?'
-  });
-
-  const [expand,setExpand]=useState({ examples:false, why:false, case:false });
+  const [expand,setExpand]=useState({ examples:true, why:true, case:false });
   const [segments,setSegments]=useState([{name:'',criteria:''},{name:'',criteria:''}]);
   const [guided, setGuided] = useState(false);
   const [openWhy, setOpenWhy] = useState({});
@@ -54,42 +51,63 @@ export default function Sprint(){
   const suggestions = SUGGESTED_LIBRARY[focusKey] || [];
 
   useEffect(()=>{
-    if (!profile) { if (typeof window !== 'undefined') window.location.assign('/onboarding'); return; }
-    try{
-      const s = JSON.parse(localStorage.getItem('ss_sprint_seed')||'null');
-      if (s) { setSeed(s); setDay(d=>({...d, title: s.title || d.title })); }
-    }catch{}
-  },[profile]);
+    if (!profile) { if (typeof window!=='undefined') window.location.assign('/onboarding'); return; }
+    if (!sid) return;
+    const s = getSprintById(String(sid));
+    if (!s) { window.location.assign('/sprints'); return; }
+    setSprint(s);
+    const d = s.data || {};
+    setStep(d.step ?? 0);
+    setExpand(d.expand ?? {examples:true,why:true,case:false});
+    setSegments(d.segments ?? [{name:'',criteria:''},{name:'',criteria:''}]);
+    setGuided(d.guided ?? false);
+    setOpenWhy({});
+    setAlready(d.already ?? false);
+    setUpgrade(d.upgrade ?? false);
+    setGoal(d.goal ?? '');
+    setNote(d.note ?? '');
+    setRating(d.rating ?? 0);
+  },[sid, profile]);
 
-  const steps=['Learn','Apply','Evolve','Coach'];
   const progress=((step+1)/steps.length)*100;
+  const setSeg = (i, field, val) => setSegments(arr=>{ const x=[...arr]; x[i]={...x[i],[field]:val}; return x; });
 
-  function setSeg(i, field, val){ setSegments(arr=>{ const x=[...arr]; x[i] = {...x[i], [field]:val}; return x; }); }
+  function persist(patch){
+    if (!sprint) return;
+    const data = {
+      step, expand, segments, guided, already, upgrade, goal, note, rating,
+      ...patch?.data
+    };
+    const saved = updateSprint(sprint.id, { data, ...(patch||{}) });
+    setSprint(saved);
+  }
 
-  function save(){
+  function saveAndFinish(){
     if (kCat && kMetric && kNew!=='') {
       const clone = JSON.parse(JSON.stringify(kpisObj));
       const row = (((clone.categories||{})[kCat]||{}).metrics||{})[kMetric];
       if (row) row.current = Number(kNew);
       setKPIs(clone);
     }
-    const entry = {
-      date: new Date().toISOString(),
-      title: day.title,
-      learnExpansions: expand,
-      apply: { already, segments, upgrade },
-      reflection: note,
-      goals: [goal].filter(Boolean),
-      rating
-    };
-    appendHistory(entry);
-    setStep(3);
+    persist({ data: { completedAt: new Date().toISOString() } });
+    setSprintStatus(sprint.id, 'done');
+    router.push('/dashboard');
   }
 
-  const metricsForCat = useMemo(()=>{
-    if (!kCat || !kpisObj.categories?.[kCat]?.metrics) return [];
-    return Object.keys(kpisObj.categories[kCat].metrics);
-  },[kCat, kpisObj]);
+  if (!sprint) {
+    return (
+      <>
+        <Nav active="today" />
+        <main className="container">
+          <div className="card" style={{marginTop:18}}>
+            <h2>No sprint loaded</h2>
+            <p className="help">This page expects a sprint id in the URL.</p>
+            <Link className="btn" href="/sprints">View all sprints</Link>
+          </div>
+        </main>
+      </>
+    );
+  }
 
   return (
     <>
@@ -99,48 +117,49 @@ export default function Sprint(){
           <div className="spaced">
             <div>
               <div className="small">Step {step+1} of 4 • {profile?.focus?.[0]||'General'}</div>
-              <h2 style={{margin:'6px 0 8px 0'}}>{steps[step]}</h2>
+              <h2 style={{margin:'6px 0 8px 0'}}>{sprint.title}</h2>
             </div>
             <div style={{minWidth:240}}><div className="progress"><span style={{width:`${progress}%`}}/></div></div>
           </div>
 
+          {/* LEARN */}
           {step===0 && (
             <section style={{marginTop:12}}>
-              <h3 style={{margin:'0 0 6px 0'}}>{day.title}</h3>
-              <p className="help">{day.knowledge}</p>
+              <p><b>Answer (brief):</b> Create two intent-based segments you can email this week; send 3 emails (nudge • proof • offer); watch CTR → CVR.</p>
               <div className="inline" style={{marginTop:12}}>
                 <button className="btn btn-chip" onClick={()=>setExpand(e=>({...e, examples:!e.examples}))}>{expand.examples?'Hide':'Show'} examples</button>
                 <button className="btn btn-chip" onClick={()=>setExpand(e=>({...e, case:!e.case}))}>{expand.case?'Hide':'Mini case'}</button>
                 <button className="btn btn-chip" onClick={()=>setExpand(e=>({...e, why:!e.why}))}>{expand.why?'Hide':'Why this works'}</button>
               </div>
-              {expand.examples && <div className="card" style={{marginTop:12}}><b>Examples</b><ul className="list"><li>Repeat buyers (90 days)</li><li>Browsed-abandoners (14 days)</li><li>High AOV customers</li></ul></div>}
+              {expand.examples && <div className="card" style={{marginTop:12}}><b>Examples</b><ul className="list"><li>Repeat buyers (90d)</li><li>Browsed-abandoners (14d)</li><li>High AOV customers</li></ul></div>}
               {expand.case && <div className="card" style={{marginTop:12}}><b>Mini case</b><p className="help">A DTC brand created two segments and sent 3 emails. CTR +0.8pp; revenue +12% in 2 weeks.</p></div>}
-              {expand.why && <div className="card" style={{marginTop:12}}><b>Why this works</b><p className="help">Relevance → higher CTR → higher CVR. Segments reduce mismatch between message and intent.</p></div>}
+              {expand.why && <div className="card" style={{marginTop:12}}><b>Why this works</b><ul className="list"><li>Relevance → higher CTR → higher CVR.</li><li>Small, intentful lists avoid fatigue.</li><li>3-email sequences compound impact.</li></ul></div>}
               <div className="spaced" style={{marginTop:18}}>
                 <button className="btn" disabled>Back</button>
-                <button className="btn btn-primary" onClick={()=>setStep(1)}>Continue</button>
+                <button className="btn btn-primary" onClick={()=>{ setStep(1); persist({data:{step:1}}); }}>Continue</button>
               </div>
             </section>
           )}
 
+          {/* APPLY */}
           {step===1 && (
             <section style={{marginTop:12}}>
               <b>Task</b>
-              <p className="help" style={{marginTop:6}}>{day.task}</p>
+              <p className="help" style={{marginTop:6}}>Create 2 segments you can email this week.</p>
 
               <div className="inline" style={{gap:18, margin:'8px 0'}}>
                 <label className="inline" style={{gap:8}}>
-                  <input type="checkbox" checked={already} onChange={e=>setAlready(e.target.checked)} />
+                  <input type="checkbox" checked={already} onChange={e=>{ setAlready(e.target.checked); persist(); }} />
                   <span>I’ve already done this</span>
                 </label>
                 {already && (
                   <label className="inline" style={{gap:8}}>
-                    <input type="checkbox" checked={upgrade} onChange={e=>setUpgrade(e.target.checked)} />
+                    <input type="checkbox" checked={upgrade} onChange={e=>{ setUpgrade(e.target.checked); persist(); }} />
                     <span>Show next-level version</span>
                   </label>
                 )}
                 {!already && (
-                  <button className="btn btn-chip" onClick={()=>setGuided(g=>!g)}>
+                  <button className="btn btn-chip" onClick={()=>{ setGuided(g=>!g); persist(); }}>
                     {guided ? 'Hide suggestions' : 'I’m new to this — suggest ideas'}
                   </button>
                 )}
@@ -158,7 +177,7 @@ export default function Sprint(){
                             <div className="small">Criteria: {s.criteria}</div>
                           </div>
                           <div className="inline">
-                            <button className="btn btn-chip" onClick={()=>setSegments(arr=>[...arr, {name:s.name, criteria:s.criteria}])}>+ Add</button>
+                            <button className="btn btn-chip" onClick={()=>{ setSegments(arr=>{ const next=[...arr, {name:s.name, criteria:s.criteria}]; persist({data:{segments:next}}); return next;}); }}>+ Add</button>
                             <button className="btn btn-chip" onClick={()=>setOpenWhy(o=>({...o, [i]:!o[i]}))}>{openWhy[i] ? 'Hide why' : 'Why this works'}</button>
                           </div>
                         </div>
@@ -175,12 +194,12 @@ export default function Sprint(){
                     {segments.map((s, i)=>(
                       <div key={i} className="card">
                         <b>Segment {i+1}</b>
-                        <input className="input" placeholder="Name" value={s.name} onChange={e=>setSeg(i,'name',e.target.value)} style={{marginTop:8}}/>
-                        <input className="input" placeholder="Criteria" value={s.criteria} onChange={e=>setSeg(i,'criteria',e.target.value)} style={{marginTop:8}}/>
+                        <input className="input" placeholder="Name" value={s.name} onChange={e=>{ const v=e.target.value; setSeg(i,'name',v); persist(); }} style={{marginTop:8}}/>
+                        <input className="input" placeholder="Criteria" value={s.criteria} onChange={e=>{ const v=e.target.value; setSeg(i,'criteria',v); persist(); }} style={{marginTop:8}}/>
                       </div>
                     ))}
                   </div>
-                  <button className="btn btn-chip" style={{marginTop:8}} onClick={()=>setSegments(a=>[...a,{name:'',criteria:''}])}>+ Add another</button>
+                  <button className="btn btn-chip" style={{marginTop:8}} onClick={()=>{ const next=[...segments,{name:'',criteria:''}]; setSegments(next); persist({data:{segments:next}}); }}>+ Add another</button>
                 </>
               )}
 
@@ -195,20 +214,21 @@ export default function Sprint(){
                 </div>
               )}
 
-              <input className="input" placeholder="Your one goal for the next month" value={goal} onChange={e=>setGoal(e.target.value)} style={{marginTop:12}}/>
+              <input className="input" placeholder="Your one goal for the next month" value={goal} onChange={e=>{ setGoal(e.target.value); persist(); }} style={{marginTop:12}}/>
 
               <div className="spaced" style={{marginTop:18}}>
-                <button className="btn" onClick={()=>setStep(0)}>Back</button>
-                <button className="btn btn-primary" onClick={()=>setStep(2)}>I’ve done this step</button>
+                <button className="btn" onClick={()=>{ setStep(0); persist({data:{step:0}}); }}>Back</button>
+                <button className="btn btn-primary" onClick={()=>{ setStep(2); persist({data:{step:2}}); }}>I’ve done this step</button>
               </div>
             </section>
           )}
 
+          {/* EVOLVE */}
           {step===2 && (
             <section style={{marginTop:12}}>
               <b>Evolve</b>
-              <p className="help" style={{marginTop:6}}>{day.reflection}</p>
-              <textarea className="textarea" placeholder="One insight or blocker…" value={note} onChange={e=>setNote(e.target.value)} />
+              <p className="help" style={{marginTop:6}}>What did you try (≤10 min)? What changed (number/observation)? What will you do tomorrow?</p>
+              <textarea className="textarea" placeholder="One insight or blocker…" value={note} onChange={e=>{ setNote(e.target.value); persist(); }} />
 
               <div className="row two" style={{marginTop:10}}>
                 <div className="card">
@@ -229,18 +249,19 @@ export default function Sprint(){
                 <div className="card">
                   <b>How useful?</b>
                   <div className="inline" style={{marginTop:8}}>
-                    {[1,2,3,4,5].map(n=><button key={n} className="btn" onClick={()=>setRating(n)} style={{borderColor: rating===n?'var(--accent)':'var(--border)'}}>{n}</button>)}
+                    {[1,2,3,4,5].map(n=><button key={n} className="btn" onClick={()=>{ setRating(n); persist(); }} style={{borderColor: rating===n?'var(--accent)':'var(--border)'}}>{n}</button>)}
                   </div>
                 </div>
               </div>
 
               <div className="spaced" style={{marginTop:18}}>
-                <button className="btn" onClick={()=>setStep(1)}>Back</button>
-                <button className="btn btn-primary" onClick={save}>Save & get coach feedback</button>
+                <button className="btn" onClick={()=>{ setStep(1); persist({data:{step:1}}); }}>Back</button>
+                <button className="btn btn-primary" onClick={()=>{ setStep(3); persist({data:{step:3}}); }}>Save to get coach tips</button>
               </div>
             </section>
           )}
 
+          {/* COACH */}
           {step===3 && (
             <section style={{marginTop:12}}>
               <b>Coach now</b>
@@ -250,12 +271,15 @@ export default function Sprint(){
                 <li>Schedule a 10-minute slot tomorrow to iterate.</li>
               </ul>
               <div className="spaced" style={{marginTop:18}}>
-                <Link className="btn" href="/dashboard">Go to dashboard</Link>
-                <button className="btn btn-primary" onClick={()=>window.location.assign('/coach')}>Talk to coach</button>
+                <Link className="btn" href="/sprints">All sprints</Link>
+                <button className="btn btn-primary" onClick={saveAndFinish}>Mark done</button>
               </div>
             </section>
           )}
         </div>
+
+        {/* Context-aware coach on this page */}
+        <CoachDock context={{ label:`Sprint • ${steps[step]} step`, step: steps[step], suggestedTitle:'Unblock today’s step' }} />
       </main>
     </>
   );
