@@ -40,15 +40,18 @@ function extractFromJD(text=''){
 }
 
 export default function Onboarding(){
-  const [mode,setMode]=useState('simple'); // 'simple' | 'enhanced'
+  const [mode,setMode]=useState('enhanced'); // default to enhanced
   const [step,setStep]=useState(0);
 
   // shared
   const [focus,setFocus]=useState('Marketing');
   const [areas,setAreas]=useState([]);
-  const [goal,setGoal]=useState('');
+  const [goal1,setGoal1]=useState('');
+  const [goal2,setGoal2]=useState('');
+  const [goal3,setGoal3]=useState('');
   const [style,setStyle]=useState('analytical');
   const [minutes,setMinutes]=useState(10);
+  const [companyWebsite,setCompanyWebsite]=useState('');
 
   // enhanced
   const [jd,setJD]=useState('');
@@ -63,8 +66,8 @@ export default function Onboarding(){
             { title:'Review suggested focus & areas', key:'areas' },
           ]
         : []),
-      { title:'Pick your primary focus', key:'focus' },
-      { title:'30-day outcome', key:'goal' },
+      { title:'Your company & focus', key:'focus' },
+      { title:'Top 3 goals (30 days)', key:'goals' },
       { title:'Coach style & cadence', key:'style' },
       { title:'Summary', key:'summary' },
     ];
@@ -101,13 +104,16 @@ export default function Onboarding(){
   }
 
   function finish(){
+    const goals = [goal1,goal2,goal3].filter(Boolean);
     const profile = {
       focus:[focus],
       areas,
       coachStyle:style,
       constraints:{ minutesPerDay:Number(minutes) },
-      goal30d: goal || 'Make visible progress',
-      jobDescription: jd ? { text: jd, fileName: jdFileName || null } : null
+      goals30d: goals,
+      goal30d: goals[0] || 'Make visible progress',
+      jobDescription: jd ? { text: jd, fileName: jdFileName || null } : null,
+      companyWebsite: companyWebsite || null
     };
     setProfile(profile);
     if (!getKPIs().categories) localStorage.setItem('ss_kpis', JSON.stringify({categories:{}}));
@@ -132,12 +138,12 @@ export default function Onboarding(){
               <section className="row two">
                 <div className="card">
                   <b>Simple (fast)</b>
-                  <p className="help" style={{marginTop:6}}>Pick a focus and goal. You can refine later.</p>
+                  <p className="help" style={{marginTop:6}}>Pick a focus and goals. You can refine later.</p>
                   <button className="btn" style={{marginTop:8, borderColor: mode==='simple'?'var(--accent)':'var(--border)'}} onClick={()=>setMode('simple')}>Use Simple</button>
                 </div>
                 <div className="card">
                   <b>Enhanced (recommended)</b>
-                  <p className="help" style={{marginTop:6}}>Paste or upload your job description so we tailor suggestions to your role.</p>
+                  <p className="help" style={{marginTop:6}}>Paste/upload your job description so we tailor to your role.</p>
                   <button className="btn" style={{marginTop:8, borderColor: mode==='enhanced'?'var(--accent)':'var(--border)'}} onClick={()=>setMode('enhanced')}>Use Enhanced</button>
                 </div>
               </section>
@@ -174,32 +180,46 @@ export default function Onboarding(){
             )}
 
             {steps[step].key==='focus' && (
-              <section>
-                <b>Your primary focus</b>
-                <div className="row" style={{gridTemplateColumns:'repeat(3,minmax(0,1fr))', marginTop:8}}>
-                  {FOCUS.map(f=>(
-                    <button key={f} className="btn" onClick={()=>setFocus(f)}
-                      style={{borderColor: focus===f ? 'var(--accent)' : 'var(--border)', fontWeight: focus===f?800:600}}>
-                      {f}
-                    </button>
-                  ))}
+              <section className="row two">
+                <div className="card">
+                  <b>Your company website (optional)</b>
+                  <input className="input" placeholder="https://yourcompany.com" value={companyWebsite} onChange={e=>setCompanyWebsite(e.target.value)} style={{marginTop:8}} />
+                  <p className="help" style={{marginTop:6}}>Helps tailor examples and suggestions to your industry.</p>
                 </div>
-                <p className="help" style={{marginTop:8}}>Used to seed your first coach reply and sprint suggestions.</p>
+                <div className="card">
+                  <b>Your primary focus</b>
+                  <div className="row" style={{gridTemplateColumns:'repeat(3,minmax(0,1fr))', marginTop:8}}>
+                    {FOCUS.map(f=>(
+                      <button key={f} className="btn" onClick={()=>setFocus(f)}
+                        style={{borderColor: focus===f ? 'var(--accent)' : 'var(--border)', fontWeight: focus===f?800:600}}>
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="help" style={{marginTop:8}}>Used to seed your first coach reply and sprint suggestions.</p>
+                </div>
               </section>
             )}
 
-            {steps[step].key==='goal' && (
+            {steps[step].key==='goals' && (
               <section className="row two">
                 <div className="card">
-                  <b>Your #1 outcome (30 days)</b>
-                  <input className="input" placeholder="e.g., Increase email revenue by 20%" value={goal} onChange={e=>setGoal(e.target.value)} style={{marginTop:8}} />
-                  <p className="help" style={{marginTop:8}}>Short and specific helps me coach you better.</p>
+                  <b>Your top 3 goals (30 days)</b>
+                  <input className="input" placeholder="Goal 1 (e.g., Increase email revenue by 20%)" value={goal1} onChange={e=>setGoal1(e.target.value)} style={{marginTop:8}} />
+                  <input className="input" placeholder="Goal 2 (optional)" value={goal2} onChange={e=>setGoal2(e.target.value)} style={{marginTop:8}} />
+                  <input className="input" placeholder="Goal 3 (optional)" value={goal3} onChange={e=>setGoal3(e.target.value)} style={{marginTop:8}} />
                 </div>
                 <div className="card">
-                  <b>Inspiration</b>
+                  <b>Inspiration (from JD & focus)</b>
                   <div className="inline" style={{marginTop:8}}>
-                    {['More leads','Higher conversion','Ship faster','Reduce churn'].map(x=>(
-                      <button key={x} className="btn btn-chip" onClick={()=>setGoal(x)}>{x}</button>
+                    {[
+                      ...(areas.includes('Email')?['Lift open rate','Improve CTR']:[]),
+                      ...(areas.includes('Conversion rate')?['Boost CVR','Fix drop-offs']:[]),
+                      ...(focus==='Sales'?['Grow pipeline','Shorten cycle']:[]),
+                      ...(focus==='Operations'?['Reduce SLA breaches','Automate workflow']:[]),
+                      ...(focus==='Leadership'?['Hire 1 key role','Define KPIs']:[]),
+                    ].concat(['Ship faster','Reduce churn']).slice(0,6).map(x=>(
+                      <button key={x} className="btn btn-chip" onClick={()=>{ if(!goal1) setGoal1(x); else if(!goal2) setGoal2(x); else setGoal3(x); }}>{x}</button>
                     ))}
                   </div>
                 </div>
@@ -233,9 +253,10 @@ export default function Onboarding(){
                 <div className="card">
                   <b>Summary</b>
                   <ul className="list" style={{marginTop:8}}>
+                    <li><b>Website:</b> {companyWebsite || '—'}</li>
                     <li><b>Focus:</b> {focus}</li>
                     <li><b>Areas:</b> {areas.length? areas.join(' • ') : '—'}</li>
-                    <li><b>Goal (30d):</b> {goal || 'Make visible progress'}</li>
+                    <li><b>Goals (30d):</b> {[goal1,goal2,goal3].filter(Boolean).join(' • ') || 'Make visible progress'}</li>
                     <li><b>Coach style:</b> {STYLE_OPTIONS.find(s=>s.key===style)?.label || style}</li>
                     <li><b>Daily minutes:</b> {minutes}</li>
                     {jd && <li><b>JD provided:</b> yes</li>}
@@ -243,7 +264,7 @@ export default function Onboarding(){
                 </div>
                 <div className="card">
                   <b>What happens next</b>
-                  <p className="help">We’ll tailor your first coach answers and sprint suggestions to your role and chosen areas.</p>
+                  <p className="help">We’ll tailor your first coach answers and sprint suggestions to your role, website, and chosen areas.</p>
                 </div>
               </section>
             )}
