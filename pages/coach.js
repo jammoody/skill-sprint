@@ -6,6 +6,8 @@ import { getProfile, getKPIs, getChat, setChat, getCoachMem, setCoachMem } from 
 export default function Coach(){
   const [messages,setMessages] = useState([]);
   const [quick,setQuick] = useState([]);
+  const [links,setLinks] = useState([]);
+  const [sprintSeed,setSprintSeed] = useState(null);
   const [input,setInput] = useState('');
   const scroller = useRef(null);
 
@@ -27,7 +29,7 @@ export default function Coach(){
     if (!text.trim()) return;
     const me = { from:'me', text, ts: Date.now() };
     const afterMe = [...messages, me];
-    setMessages(afterMe); setChat(afterMe); setQuick([]);
+    setMessages(afterMe); setChat(afterMe); setQuick([]); setLinks([]); setSprintSeed(null);
 
     const payload = { profile: getProfile(), kpis: getKPIs(), last: afterMe.slice(-6), mem: getCoachMem(), user: text };
     try{
@@ -37,9 +39,10 @@ export default function Coach(){
       const updated = [...afterMe, coach];
       setMessages(updated); setChat(updated);
       setQuick(Array.isArray(data.quick)? data.quick : []);
+      setLinks(Array.isArray(data.learningLinks)? data.learningLinks : []);
       if (data.mem) setCoachMem(data.mem);
-      if (data.sprintSeed) localStorage.setItem('ss_sprint_seed', JSON.stringify(data.sprintSeed));
-      if (data.route === 'sprint') window.location.assign('/sprint');
+      if (data.sprintSeed) setSprintSeed(data.sprintSeed);
+      if (data.route === 'sprint') startSprint(data.sprintSeed);
     }catch{
       const coach = { from:'coach', text:'Want me to start a 10-minute sprint based on that?', ts: Date.now() };
       const updated = [...afterMe, coach];
@@ -48,12 +51,14 @@ export default function Coach(){
     }
   }
 
+  function startSprint(seed){
+    if (seed) localStorage.setItem('ss_sprint_seed', JSON.stringify(seed));
+    window.location.assign('/sprint');
+  }
+
   function onQuick(q){
     setQuick([]);
-    if (q==='Start sprint') {
-      localStorage.setItem('ss_sprint_seed', JSON.stringify({ title:'High-impact segmentation', topic:'Marketing' }));
-      window.location.assign('/sprint'); return;
-    }
+    if (q==='Start sprint') return startSprint({ title:'High-impact segmentation', topic: getProfile()?.focus?.[0]||'General' });
     send(q);
   }
 
@@ -65,9 +70,25 @@ export default function Coach(){
           <div ref={scroller} className="messages">
             {messages.map((m,i)=><div key={i} className={`msg ${m.from}`}><div className="small" style={{opacity:.7}}>{m.from==='me'?'You':'Coach'}</div>{m.text}</div>)}
           </div>
-          {!!quick.length && <div className="quick">{quick.map((q,i)=><button key={i} className="btn btn-chip" onClick={()=>onQuick(q)}>{q}</button>)}</div>}
+
+          {links.length>0 && (
+            <div className="inline" style={{marginTop:8}}>
+              {links.map((l,i)=>(
+                <a key={i} className="btn btn-chip" href={l.href}>{l.title}</a>
+              ))}
+            </div>
+          )}
+
+          {!!quick.length && <div className="quick" style={{marginTop:8}}>{quick.map((q,i)=><button key={i} className="btn btn-chip" onClick={()=>onQuick(q)}>{q}</button>)}</div>}
+
+          {sprintSeed && (
+            <div className="inline" style={{marginTop:8}}>
+              <button className="btn btn-primary" onClick={()=>startSprint(sprintSeed)}>Start Sprint: {sprintSeed.title}</button>
+            </div>
+          )}
+
           <div className="inputbar">
-            <input className="input" placeholder="Type a message…" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') send(input); }} />
+            <input className="input" placeholder="Ask me anything…" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') send(input); }} />
             <button className="btn btn-primary" onClick={()=>send(input)}>Send</button>
           </div>
         </div>
