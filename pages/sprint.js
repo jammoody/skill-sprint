@@ -4,16 +4,41 @@ import Link from 'next/link';
 import Nav from '../components/Nav';
 import { getProfile, getKPIs, setKPIs, appendHistory } from '../lib/store';
 
+// Suggested segments catalog (extend per focus as needed)
+const SUGGESTED_LIBRARY = {
+  Marketing: [
+    { name:'Repeat buyers (90 days)', criteria:'Purchased ≥2 times in 90d', why:'Warmer audience; incremental purchase lifts revenue fast.' },
+    { name:'Browsed-abandoners (14 days)', criteria:'Visited product pages but no purchase (14d)', why:'Fresh intent → higher CTR/CVR with light nudge.' },
+    { name:'High AOV customers', criteria:'AOV in top 20%', why:'Smaller list, outsized revenue per send; tailor premium offers.' },
+  ],
+  'E-commerce': [
+    { name:'Add-to-cart no checkout', criteria:'Added to cart, no order (7d)', why:'Closest to purchase; simple reminder works well.' },
+    { name:'First-time buyers (30 days)', criteria:'1 order in 30d', why:'Onboarding + cross-sell can lift LTV early.' },
+    { name:'Lapsed buyers', criteria:'No purchase in 180d', why:'Reactivation with incentive recovers dormant revenue.' },
+  ],
+  General: [
+    { name:'Recent engagers', criteria:'Opened or clicked in 30d', why:'Active audience → quick signal on message fit.' },
+    { name:'Prospects by source', criteria:'Came from source X', why:'Match message to acquisition promise for relevance.' },
+  ]
+};
+
 export default function Sprint(){
   const profile = useMemo(()=>getProfile(),[]);
   const kpisObj = useMemo(()=>getKPIs(),[]);
   const [seed,setSeed]=useState(null);
 
   const [step,setStep]=useState(0);
-  const [day,setDay]=useState({ title:'High-impact segmentation', knowledge:'Two quick segments can lift CTR/CVR without heavy setup.', task:'Create 2 segments you can email this week.', reflection:'What did you try (≤10 min)? What changed (number/observation)? What will you do tomorrow?' });
+  const [day,setDay]=useState({
+    title:'High-impact segmentation',
+    knowledge:'Two quick segments can lift CTR/CVR without heavy setup.',
+    task:'Create 2 segments you can email this week.',
+    reflection:'What did you try (≤10 min)? What changed (number/observation)? What will you do tomorrow?'
+  });
 
   const [expand,setExpand]=useState({ examples:false, why:false, case:false });
   const [segments,setSegments]=useState([{name:'',criteria:''},{name:'',criteria:''}]);
+  const [guided, setGuided] = useState(false);
+  const [openWhy, setOpenWhy] = useState({});
   const [already,setAlready]=useState(false);
   const [upgrade,setUpgrade]=useState(false);
   const [goal,setGoal]=useState('');
@@ -24,6 +49,9 @@ export default function Sprint(){
   const [kCat,setKCat]=useState(cats[0]||'');
   const [kMetric,setKMetric]=useState('');
   const [kNew,setKNew]=useState('');
+
+  const focusKey = (profile?.focus?.[0] && SUGGESTED_LIBRARY[profile.focus[0]]) ? profile.focus[0] : 'General';
+  const suggestions = SUGGESTED_LIBRARY[focusKey] || [];
 
   useEffect(()=>{
     if (!profile) { if (typeof window !== 'undefined') window.location.assign('/onboarding'); return; }
@@ -111,11 +139,39 @@ export default function Sprint(){
                     <span>Show next-level version</span>
                   </label>
                 )}
+                {!already && (
+                  <button className="btn btn-chip" onClick={()=>setGuided(g=>!g)}>
+                    {guided ? 'Hide suggestions' : 'I’m new to this — suggest ideas'}
+                  </button>
+                )}
               </div>
+
+              {!already && guided && (
+                <div className="card" style={{marginTop:8}}>
+                  <b>Suggested segments for {focusKey}</b>
+                  <div className="row" style={{marginTop:8}}>
+                    {suggestions.map((s, i)=>(
+                      <div key={i} className="card">
+                        <div className="spaced">
+                          <div>
+                            <div style={{fontWeight:700}}>{s.name}</div>
+                            <div className="small">Criteria: {s.criteria}</div>
+                          </div>
+                          <div className="inline">
+                            <button className="btn btn-chip" onClick={()=>setSegments(arr=>[...arr, {name:s.name, criteria:s.criteria}])}>+ Add</button>
+                            <button className="btn btn-chip" onClick={()=>setOpenWhy(o=>({...o, [i]:!o[i]}))}>{openWhy[i] ? 'Hide why' : 'Why this works'}</button>
+                          </div>
+                        </div>
+                        {openWhy[i] && <p className="help" style={{marginTop:6}}>{s.why}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {!already && (
                 <>
-                  <div className="row">
+                  <div className="row" style={{marginTop:8}}>
                     {segments.map((s, i)=>(
                       <div key={i} className="card">
                         <b>Segment {i+1}</b>
