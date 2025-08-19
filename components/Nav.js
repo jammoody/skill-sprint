@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 
 export default function Nav({ active }) {
   const [streak, setStreak] = useState(0);
-
   useEffect(() => {
     try {
       const h = JSON.parse(localStorage.getItem('ss_history') || '[]');
@@ -14,7 +13,6 @@ export default function Nav({ active }) {
       setStreak(s);
     } catch {}
   }, []);
-
   return (
     <div className="topnav">
       <div className="topnav-inner">
@@ -25,9 +23,7 @@ export default function Nav({ active }) {
           <Link className={active==='dash'?'active':''} href="/dashboard">Dashboard</Link>
           <Link className={active==='kpis'?'active':''} href="/kpis">KPIs</Link>
         </nav>
-        <div className="rightnav">
-          <span>Streak 🔥 <b>{streak}</b></span>
-        </div>
+        <div className="rightnav">Streak 🔥 <b>{streak}</b></div>
       </div>
     </div>
   );
