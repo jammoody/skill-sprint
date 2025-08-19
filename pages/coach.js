@@ -1,23 +1,25 @@
 // pages/coach.js
 import { useEffect, useRef, useState } from 'react';
 import Nav from '../components/Nav';
-import { getProfile, getKPIs, getChat, setChat, getCoachMem, setCoachMem } from '../lib/store';
+import { getProfile, getKPIs, getChat, setChat, getCoachMem, setCoachMem, createSprint } from '../lib/store';
 
 export default function Coach(){
   const [messages,setMessages] = useState([]);
   const [quick,setQuick] = useState([]);
   const [links,setLinks] = useState([]);
-  const [sprintSeed,setSprintSeed] = useState(null);
   const [input,setInput] = useState('');
+  const [lastUserQuery,setLastUserQuery] = useState('');
   const scroller = useRef(null);
 
   useEffect(()=>{
-    const profile = getProfile();
+    const p = getProfile();
+    if (!p) { if (typeof window!=='undefined') window.location.assign('/onboarding'); return; }
     let chat = getChat();
-    if (!profile) { if (typeof window!=='undefined') window.location.assign('/onboarding'); return; }
     if (chat.length === 0) {
-      chat = [{ from:'coach', text:`Hey! I’m your coach. Your focus is ${profile.focus?.[0]||'General'} and your 30-day goal is “${profile.goal30d}”. Sound right?`, ts: Date.now() }];
-      setChat(chat); setQuick(['✅ Yes','✏️ Tweak','❓ Not sure']);
+      const intro = `Hey! I’m your coach. Your focus is ${p.focus?.[0]||'General'} and your 30-day goal is “${p.goal30d || (p.goals30d?.[0] || 'Make visible progress')}”. What do you want help with?`;
+      chat = [{ from:'coach', text:intro, ts: Date.now() }];
+      setChat(chat);
+      setQuick(['Answer briefly','Start sprint','Show resources']);
     }
     setMessages(chat);
     if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
@@ -27,39 +29,62 @@ export default function Coach(){
 
   async function send(text){
     if (!text.trim()) return;
-    const me = { from:'me', text, ts: Date.now() };
+    const clean = text.trim();
+    const me = { from:'me', text: clean, ts: Date.now() };
     const afterMe = [...messages, me];
-    setMessages(afterMe); setChat(afterMe); setQuick([]); setLinks([]); setSprintSeed(null);
+    setMessages(afterMe); setChat(afterMe);
+    setLastUserQuery(clean);
+    setQuick([]); setLinks([]);
 
-    const payload = { profile: getProfile(), kpis: getKPIs(), last: afterMe.slice(-6), mem: getCoachMem(), user: text };
     try{
-      const res = await fetch('/api/coach', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const res = await fetch('/api/coach', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          profile: getProfile(),
+          kpis: getKPIs(),
+          last: afterMe.slice(-6),
+          mem: getCoachMem(),
+          user: clean
+        })
+      });
       const data = await res.json();
-      const coach = { from:'coach', text: data.reply || 'Got it.', ts: Date.now() };
-      const updated = [...afterMe, coach];
-      setMessages(updated); setChat(updated);
-      setQuick(Array.isArray(data.quick)? data.quick : []);
-      setLinks(Array.isArray(data.learningLinks)? data.learningLinks : []);
       if (data.mem) setCoachMem(data.mem);
-      if (data.sprintSeed) setSprintSeed(data.sprintSeed);
-      if (data.route === 'sprint') startSprint(data.sprintSeed);
-    }catch{
-      const coach = { from:'coach', text:'Want me to start a 10-minute sprint based on that?', ts: Date.now() };
+      if (Array.isArray(data.learningLinks)) setLinks(data.learningLinks);
+      if (Array.isArray(data.quick)) setQuick(data.quick);
+
+      const coach = { from:'coach', text: data.reply || 'Okay.', ts: Date.now() };
       const updated = [...afterMe, coach];
       setMessages(updated); setChat(updated);
-      setQuick(['Start sprint','Different idea']);
+
+      // If API already decided to start a sprint immediately (rare), create it now
+      if (data.sprintSeed && /starting a fresh sprint/i.test(data.reply || '')) {
+        startNewSprint(data.sprintSeed);
+      }
+    }catch{
+      const coach = { from:'coach', text:'I can give a quick answer, link a guide, or start a new sprint — what would you like?', ts: Date.now() };
+      const updated = [...afterMe, coach]; setMessages(updated); setChat(updated);
+      setQuick(['Answer briefly','Start sprint','Show resources']);
     }
   }
 
-  function startSprint(seed){
-    if (seed) localStorage.setItem('ss_sprint_seed', JSON.stringify(seed));
-    window.location.assign('/sprint');
+  function startNewSprint(seed){
+    // If we have a seed from the API, use it; otherwise derive from last user query or goal
+    const p = getProfile();
+    const derivedTitle =
+      seed?.title
+      || (lastUserQuery ? (lastUserQuery.length > 60 ? `${lastUserQuery.slice(0,57)}…` : lastUserQuery) : null)
+      || (p?.goals30d?.[0] || p?.goal30d || `Focused improvement in ${p?.focus?.[0]||'General'}`);
+    const s = createSprint({ title: derivedTitle, topic: p?.focus?.[0]||'General' });
+    window.location.assign(`/sprint?sid=${encodeURIComponent(s.id)}`);
   }
 
   function onQuick(q){
-    setQuick([]);
-    if (q==='Start sprint') return startSprint({ title:'High-impact segmentation', topic: getProfile()?.focus?.[0]||'General' });
-    send(q);
+    if (q==='Start sprint') return startNewSprint({});
+    if (q==='Show resources') return send('Show resources');
+    if (q==='Answer briefly') return send('Answer briefly');
+    // fallback: treat the chip text as a message
+    return send(q);
   }
 
   return (
@@ -73,23 +98,21 @@ export default function Coach(){
 
           {links.length>0 && (
             <div className="inline" style={{marginTop:8}}>
-              {links.map((l,i)=>(
-                <a key={i} className="btn btn-chip" href={l.href}>{l.title}</a>
-              ))}
+              {links.map((l,i)=><a key={i} className="btn btn-chip" href={l.href}>{l.title}</a>)}
             </div>
           )}
 
           {!!quick.length && <div className="quick" style={{marginTop:8}}>{quick.map((q,i)=><button key={i} className="btn btn-chip" onClick={()=>onQuick(q)}>{q}</button>)}</div>}
 
-          {sprintSeed && (
-            <div className="inline" style={{marginTop:8}}>
-              <button className="btn btn-primary" onClick={()=>startSprint(sprintSeed)}>Start Sprint: {sprintSeed.title}</button>
-            </div>
-          )}
-
           <div className="inputbar">
-            <input className="input" placeholder="Ask me anything…" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') send(input); }} />
-            <button className="btn btn-primary" onClick={()=>send(input)}>Send</button>
+            <input
+              className="input"
+              placeholder="Ask me anything (e.g., How do I lower ROAS?)"
+              value={input}
+              onChange={e=>setInput(e.target.value)}
+              onKeyDown={e=>{ if(e.key==='Enter') { send(input); setInput(''); } }}
+            />
+            <button className="btn btn-primary" onClick={()=>{ send(input); setInput(''); }}>Send</button>
           </div>
         </div>
       </main>
