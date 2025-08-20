@@ -1,12 +1,12 @@
 // pages/coach.js
 import { useEffect, useRef, useState } from 'react';
-import Nav from '@/components/Nav';
+import Nav from '../components/Nav';
 import {
   getProfile, getKPIs,
   getThreads, setThreads, createThread, getThreadById,
   appendThreadMessage, setActiveThreadId, getActiveThreadId,
   setThreadTimebox, setThreadStatus
-} from '@/lib/store';
+} from '../lib/store';
 
 function Timebox({ value, onChange }) {
   const opts = [5,10,20,30];
@@ -23,7 +23,6 @@ function Timebox({ value, onChange }) {
 }
 
 function LearningBlock({ mode, onModeChange, onSubmitMiniTest }) {
-  /** mode: learn | quiz | test | real */
   const [answers,setAnswers] = useState({q1:'',q2:''});
   const [mini,setMini] = useState('');
   const [real,setReal] = useState('');
@@ -148,7 +147,6 @@ export default function Coach(){
   function onTimeboxChange(n){
     setThreadTimebox(activeId,n); refresh();
     addCoach(`Timebox set to ${n} minutes. I’ll keep steps tight.`);
-    // Drop a first step and learning panel
     addCoach(`Step 1 (≤${n}m): learn the core idea, answer 2 checks, then do a mini test right now.`);
   }
 
@@ -229,7 +227,6 @@ export default function Coach(){
             ))}
           </div>
 
-          {/* Learning mode lives under the chat — toggled as you sprint */}
           <LearningBlock mode={learnMode} onModeChange={setLearnMode} onSubmitMiniTest={onSubmitMiniTest} />
 
           {links.length>0 && (
