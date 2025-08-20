@@ -1,7 +1,7 @@
 // pages/onboarding.js
 import { useMemo, useState } from 'react';
-import Nav from '@/components/Nav';
-import { setProfile, getKPIs } from '@/lib/store';
+import Nav from '../components/Nav';
+import { setProfile, getKPIs } from '../lib/store';
 
 const FOCUS = ['Marketing','E-commerce','Leadership','Operations','Sales','General'];
 const STYLE = [
