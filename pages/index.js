@@ -1,6 +1,6 @@
 // pages/index.js
 import Link from 'next/link';
-import Nav from '@/components/Nav';
+import Nav from '../components/Nav';
 
 export default function Home(){
   return (
