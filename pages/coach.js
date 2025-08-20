@@ -11,7 +11,7 @@ import {
 function Timebox({ value, onChange }) {
   const opts = [5,10,20,30];
   return (
-    <div className="inline" style={{gap:6}}>
+    <div className="timebox">
       {opts.map(n => (
         <button key={n} className="btn btn-chip"
           onClick={()=>onChange(n)} style={{borderColor: value===n?'var(--accent)':'var(--border)'}}>
@@ -29,9 +29,9 @@ function LearningBlock({ mode, onModeChange, onSubmitMiniTest }) {
 
   return (
     <div className="card" style={{marginTop:8}}>
-      <div className="inline" style={{justifyContent:'space-between'}}>
+      <div className="spaced">
         <b>Learning</b>
-        <div className="inline">
+        <div className="chipbar">
           {['learn','quiz','test','real'].map(m=>(
             <button key={m} className="btn btn-chip" onClick={()=>onModeChange(m)} style={{borderColor: mode===m?'var(--accent)':'var(--border)'}}>
               {m}
@@ -48,14 +48,16 @@ function LearningBlock({ mode, onModeChange, onSubmitMiniTest }) {
       )}
 
       {mode==='quiz' && (
-        <div style={{marginTop:8}}>
-          <div className="inline" style={{alignItems:'flex-start'}}>
-            <div className="small" style={{minWidth:160}}>1) What metric shows message fit in emails?</div>
-            <input className="input" placeholder="e.g., CTR" value={answers.q1} onChange={e=>setAnswers(v=>({...v,q1:e.target.value}))} />
+        <div style={{marginTop:8, display:'grid', gap:10}}>
+          <div>
+            <div className="small" style={{marginBottom:6}}>1) What metric shows message fit in emails?</div>
+            <input className="input" placeholder="e.g., CTR"
+              value={answers.q1} onChange={e=>setAnswers(v=>({...v,q1:e.target.value}))} />
           </div>
-          <div className="inline" style={{alignItems:'flex-start', marginTop:8}}>
-            <div className="small" style={{minWidth:160}}>2) Why change one thing at a time?</div>
-            <input className="input" placeholder="Your answer…" value={answers.q2} onChange={e=>setAnswers(v=>({...v,q2:e.target.value}))} />
+          <div>
+            <div className="small" style={{marginBottom:6}}>2) Why change one thing at a time?</div>
+            <input className="input" placeholder="Your answer…"
+              value={answers.q2} onChange={e=>setAnswers(v=>({...v,q2:e.target.value}))} />
           </div>
         </div>
       )}
@@ -63,9 +65,9 @@ function LearningBlock({ mode, onModeChange, onSubmitMiniTest }) {
       {mode==='test' && (
         <div style={{marginTop:8}}>
           <b>Mini test (do now, ≤5m)</b>
-          <p className="help">Draft 3 subject lines using (curiosity • benefit • urgency). Paste them here:</p>
+          <p className="help">Draft 3 subject lines (curiosity • benefit • urgency). Paste them here:</p>
           <textarea className="textarea" placeholder="- SL1: ..." value={mini} onChange={e=>setMini(e.target.value)} />
-          <div className="inline" style={{marginTop:8}}>
+          <div className="chipbar" style={{marginTop:8}}>
             <button className="btn btn-primary" onClick={()=>onSubmitMiniTest(mini)}>Submit mini test</button>
           </div>
         </div>
@@ -188,8 +190,9 @@ export default function Coach(){
   return (
     <>
       <Nav active="coach" />
-      <main className="container" style={{display:'grid', gridTemplateColumns:'280px 1fr', gap:16}}>
-        <aside className="card" style={{height:'calc(100vh - 140px)', overflow:'auto'}}>
+      <main className="container layout-2col">
+        {/* LEFT: threads */}
+        <aside className="card sidebar">
           <div className="spaced">
             <b>Your sprints</b>
             <button className="btn" onClick={()=>newThread('')}>+ New sprint</button>
@@ -206,20 +209,21 @@ export default function Coach(){
           </ul>
         </aside>
 
-        <section className="card" style={{display:'flex', flexDirection:'column', height:'calc(100vh - 140px)'}}>
-          <div className="spaced">
+        {/* RIGHT: chat + learning */}
+        <section className="card mainpanel">
+          <div className="spaced" style={{flexWrap:'wrap', gap:10}}>
             <div>
-              <div className="small" style={{opacity:.7}}>{active?.topic || (profile?.focus?.[0]||'General')}</div>
-              <h2 style={{margin:'6px 0 0 0'}}>{active?.title || 'Coach'}</h2>
+              <div className="small" style={{opacity:.7}}>{(getThreadById(activeId)?.topic) || (profile?.focus?.[0]||'General')}</div>
+              <h2 style={{margin:'6px 0 0 0'}}>{(getThreadById(activeId)?.title) || 'Coach'}</h2>
             </div>
-            <div className="inline" style={{gap:8, alignItems:'center'}}>
-              <Timebox value={active?.timebox||10} onChange={onTimeboxChange} />
+            <div className="timebox">
+              <Timebox value={getThreadById(activeId)?.timebox||10} onChange={onTimeboxChange} />
               <button className="btn" onClick={markDone}>Mark done</button>
             </div>
           </div>
 
           <div ref={scroller} className="messages" style={{flex:1, overflow:'auto', marginTop:8}}>
-            {(active?.messages||[]).map((m,i)=>(
+            {(getThreadById(activeId)?.messages||[]).map((m,i)=>(
               <div key={i} className={`msg ${m.from}`}>
                 <div className="small" style={{opacity:.7}}>{m.from==='me'?'You':'Coach'}</div>
                 {m.text}
@@ -230,17 +234,17 @@ export default function Coach(){
           <LearningBlock mode={learnMode} onModeChange={setLearnMode} onSubmitMiniTest={onSubmitMiniTest} />
 
           {links.length>0 && (
-            <div className="inline" style={{marginTop:8}}>
+            <div className="chipbar" style={{marginTop:8}}>
               {links.map((l,i)=><a key={i} className="btn btn-chip" href={l.href}>{l.title}</a>)}
             </div>
           )}
           {!!quick.length && (
-            <div className="quick" style={{marginTop:8}}>
+            <div className="chipbar" style={{marginTop:8}}>
               {quick.map((q,i)=><button key={i} className="btn btn-chip" onClick={()=>onQuick(q)}>{q}</button>)}
             </div>
           )}
 
-          <div className="inputbar" style={{marginTop:8}}>
+          <div className="inputbar">
             <input className="input" placeholder="Ask your coach… (e.g., Lower ROAS, Start sprint on subject lines, 10m)"
               value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') send(); }} />
             <button className="btn btn-primary" onClick={send}>Send</button>
