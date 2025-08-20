@@ -1,6 +1,6 @@
 // pages/learn.js
 import { useRouter } from 'next/router';
-import Nav from '@/components/Nav';
+import Nav from '../components/Nav';
 
 const CONTENT = {
   'getting-started': {
