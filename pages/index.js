@@ -5,38 +5,30 @@ import Nav from '../components/Nav';
 export default function Home(){
   return (
     <>
-      <Nav active="home" />
-      <main className="container">
-        <div className="row">
-          <section className="card">
-            <h1>Become great at your job — 10 minutes at a time</h1>
-            <p className="help">Skill Sprint is a conversational coach + bite-size learning. Ask for help on real problems, then do a 5–30 minute sprint that teaches and applies.</p>
-            <div className="inline" style={{marginTop:10}}>
-              <Link className="btn btn-primary" href="/onboarding">Start free</Link>
-              <Link className="btn" href="/coach">Open Coach</Link>
-            </div>
-          </section>
-          <section className="card">
-            <b>How it works</b>
-            <ul className="list">
-              <li><b>Upload your job description</b> to tailor context.</li>
-              <li><b>Chat with your coach</b> about live issues.</li>
-              <li><b>Run a sprint</b> with learning → quiz → mini test → real task.</li>
-              <li><b>Report results</b> and get the next best step.</li>
-            </ul>
-          </section>
-        </div>
+      <Nav active="" />
+      <main className="container" style={{paddingTop:24}}>
+        <section className="card" style={{background:'linear-gradient(135deg, #ffffff 60%, #EEF2FF)', borderColor:'#E0E7FF'}}>
+          <h1 style={{margin:'0 0 8px 0', fontSize:32, lineHeight:1.2}}>
+            Your AI Coach to <span style={{background:'linear-gradient(90deg,#8B5CF6,#3B82F6)', WebkitBackgroundClip:'text', color:'transparent'}}>level up at work</span>
+          </h1>
+          <p style={{opacity:.8,maxWidth:620}}>
+            Short, practical sprints guided by a coach. Learn fast, apply immediately, and track progress against real KPIs.
+          </p>
+          <div className="chips" style={{marginTop:12}}>
+            <Link href="/onboarding"><button className="btn btn-primary">Start free</button></Link>
+            <Link href="/dashboard"><button className="btn">View dashboard</button></Link>
+          </div>
+        </section>
 
-        <section className="card" style={{marginTop:12}}>
-          <b>Why it’s better than courses</b>
-          <ul className="list">
-            <li>Coaches you through your <i>actual</i> work, not generic theory.</li>
-            <li>Short, focused, and measurable.</li>
-            <li>Adapts to your goals, KPIs, and constraints.</li>
+        <section className="card" style={{marginTop:16}}>
+          <div className="section-title">Why Skill Sprint?</div>
+          <ul style={{paddingLeft:18,margin:0,lineHeight:1.8}}>
+            <li>Coach-first: ask anything, get actionable answers.</li>
+            <li>Deepstash-style learning cards: Learn → Quiz → Real.</li>
+            <li>Daily sprints aligned to your goals and KPIs.</li>
           </ul>
         </section>
       </main>
-      <footer className="version">Skill Sprint</footer>
     </>
   );
 }
