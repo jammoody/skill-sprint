@@ -16,7 +16,7 @@ export default function Nav({ active="" }){
         <nav className="nav-core">
           <Item href="/dashboard" label="Dashboard" keyName="dash" />
           <Item href="/coach" label="Coach" keyName="coach" />
-          <Item href="/learn" label="Learn" keyName="learn" />
+          <Item href="/sprint" label="Sprint" keyName="sprint" />
           <Item href="/onboarding" label="Onboard" keyName="onboard" />
         </nav>
 
@@ -29,7 +29,7 @@ export default function Nav({ active="" }){
         <div className="nav-drawer container">
           <Link onClick={()=>setOpen(false)} href="/dashboard" className="nav-drawer-link">Dashboard</Link>
           <Link onClick={()=>setOpen(false)} href="/coach" className="nav-drawer-link">Coach</Link>
-          <Link onClick={()=>setOpen(false)} href="/learn" className="nav-drawer-link">Learn</Link>
+          <Link onClick={()=>setOpen(false)} href="/sprint" className="nav-drawer-link">Today’s Sprint</Link>
           <Link onClick={()=>setOpen(false)} href="/onboarding" className="nav-drawer-link">Onboarding</Link>
           <Link onClick={()=>setOpen(false)} href="/" className="nav-drawer-link">Home</Link>
         </div>
